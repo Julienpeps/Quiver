@@ -44,8 +44,8 @@ class Doctor:
         architecture = str(server.get("Arch") or server.get("Architecture") or "unknown")
         results.append(Check("Docker daemon architecture", "OK", architecture))
         results.append(self._local_context())
-        results.append(self._feature("Buildx", "buildx", "version"))
-        results.append(self._feature("Compose v2", "compose", "version"))
+        results.append(self._buildx())
+        results.append(self._compose())
         if os_name.lower() == "linux":
             results.append(self._probe_container())
             results.append(self._tun_probe())
@@ -113,12 +113,19 @@ class Doctor:
             )
         return Check("TUN/VPN capability", "OK", "")
 
-    def _feature(self, name: str, *command: str) -> Check:
+    def _buildx(self) -> Check:
         try:
-            self.docker.run(*command)
+            self.docker.buildx("version")
         except DockerError as error:
-            return Check(name, "FAIL", str(error))
-        return Check(name, "OK", "")
+            return Check("Buildx", "FAIL", str(error))
+        return Check("Buildx", "OK", "")
+
+    def _compose(self) -> Check:
+        try:
+            self.docker.compose("version")
+        except DockerError as error:
+            return Check("Compose v2", "FAIL", str(error))
+        return Check("Compose v2", "OK", "")
 
 
 def _server(version: dict[str, Any]) -> dict[str, Any]:

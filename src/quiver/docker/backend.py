@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from collections.abc import Callable, Sequence
@@ -53,6 +54,8 @@ class DockerBackend:
         self._runner = runner
         self._interactive_runner = interactive_runner
         self.on_command = on_command
+        self._docker_plugins: set[str] = set()
+        self._standalone_plugins: set[str] = set()
 
     def command(self, *args: str) -> list[str]:
         """Build a Docker command, applying the invocation-scoped context."""
@@ -80,9 +83,27 @@ class DockerBackend:
         and error so long-running output (for example ``logs --follow``) is not
         buffered in memory.
         """
-        command = self.command(*args)
+        return self._execute(
+            self.command(*args),
+            self.format_command(args, secrets),
+            check=check,
+            input=input,
+            stream=stream,
+        )
+
+    def _execute(
+        self,
+        command: list[str],
+        rendered: str,
+        *,
+        check: bool,
+        input: str | None = None,
+        stream: bool = False,
+        environment: dict[str, str] | None = None,
+    ) -> CommandResult:
+        """Run one concrete command and translate executable/exit failures."""
         if self.on_command is not None:
-            self.on_command(self.format_command(args, secrets))
+            self.on_command(rendered)
         try:
             completed = self._runner(
                 command,
@@ -90,11 +111,10 @@ class DockerBackend:
                 input=input,
                 capture_output=not stream,
                 text=True,
+                **({"env": environment} if environment is not None else {}),
             )
         except FileNotFoundError as error:
-            raise DockerUnavailableError(
-                f"Docker executable {self.executable!r} was not found"
-            ) from error
+            raise DockerUnavailableError(f"Docker executable {command[0]!r} was not found") from error
         except OSError as error:
             raise DockerUnavailableError(f"could not execute Docker: {error}") from error
 
@@ -105,9 +125,13 @@ class DockerBackend:
             stderr="" if stream else completed.stderr,
         )
         if check and result.returncode:
-            detail = result.stderr.strip() or result.stdout.strip() or "unknown Docker error"
-            raise DockerError(f"Docker command failed ({result.returncode}): {detail}")
+            self._raise_for_result(result)
         return result
+
+    @staticmethod
+    def _raise_for_result(result: CommandResult) -> None:
+        detail = result.stderr.strip() or result.stdout.strip() or "unknown Docker error"
+        raise DockerError(f"Docker command failed ({result.returncode}): {detail}")
 
     def run_interactive(self, *args: str) -> int:
         """Run Docker attached to this process's standard streams."""
@@ -153,9 +177,67 @@ class DockerBackend:
             raise DockerError("Docker inspect response must be a one-item object list")
         return data[0]
 
+    def buildx(self, *args: str, check: bool = True, stream: bool = False) -> CommandResult:
+        """Run Buildx, falling back to a standalone ``docker-buildx`` binary."""
+        return self._plugin("buildx", *args, check=check, stream=stream)
+
     def compose(self, *args: str, check: bool = True, stream: bool = False) -> CommandResult:
-        """Run Docker Compose v2 with the same invocation-scoped Docker context."""
-        return self.run("compose", *args, check=check, stream=stream)
+        """Run Compose, falling back to a standalone ``docker-compose`` binary."""
+        return self._plugin("compose", *args, check=check, stream=stream)
+
+    def _plugin(self, plugin: str, *args: str, check: bool, stream: bool) -> CommandResult:
+        """Run a Docker CLI plugin, accommodating standalone Homebrew binaries."""
+        if plugin in self._standalone_plugins:
+            return self._run_standalone_plugin(plugin, *args, check=check, stream=stream)
+        if stream and plugin not in self._docker_plugins:
+            # Probe quietly before a long-running command so an unavailable CLI
+            # plugin does not emit an error before the standalone fallback runs.
+            probe = self.run(plugin, "version", check=False)
+            if probe.returncode == 0:
+                self._docker_plugins.add(plugin)
+                return self.run(plugin, *args, check=check, stream=True)
+            if self._plugin_unavailable(probe) and shutil.which(f"{self.executable}-{plugin}"):
+                self._standalone_plugins.add(plugin)
+                return self._run_standalone_plugin(plugin, *args, check=check, stream=True)
+            if check:
+                self._raise_for_result(probe)
+            return probe
+
+        result = self.run(plugin, *args, check=False, stream=stream)
+        standalone = f"{self.executable}-{plugin}"
+        if (
+            result.returncode
+            and self._plugin_unavailable(result)
+            and shutil.which(standalone) is not None
+        ):
+            self._standalone_plugins.add(plugin)
+            return self._run_standalone_plugin(plugin, *args, check=check, stream=stream)
+        if check and result.returncode:
+            self._raise_for_result(result)
+        if result.returncode == 0:
+            self._docker_plugins.add(plugin)
+        return result
+
+    @staticmethod
+    def _plugin_unavailable(result: CommandResult) -> bool:
+        detail = f"{result.stdout}\n{result.stderr}".lower()
+        return "unknown command" in detail or "not a docker command" in detail
+
+    def _run_standalone_plugin(
+        self, plugin: str, *args: str, check: bool, stream: bool
+    ) -> CommandResult:
+        executable = f"{self.executable}-{plugin}"
+        environment = dict(os.environ)
+        if self.context:
+            environment["DOCKER_CONTEXT"] = self.context
+        prefix = f"DOCKER_CONTEXT={self.context} " if self.context else ""
+        return self._execute(
+            [executable, *args],
+            prefix + " ".join([executable, *args]),
+            check=check,
+            stream=stream,
+            environment=environment,
+        )
 
     def format_command(self, args: Sequence[str], secrets: Sequence[str] = ()) -> str:
         """Render an invocation for diagnostics without exposing supplied secrets."""

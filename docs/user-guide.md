@@ -11,13 +11,16 @@ uv sync --all-groups
 uv run quiver doctor
 ```
 
-You need a Docker daemon running Linux containers. The image-build command additionally requires Docker Buildx:
+You need a Docker daemon running Linux containers. Image builds require Docker Buildx, and Compose-backed services require Docker Compose v2. Quiver supports either Docker CLI plugin form or standalone binaries:
 
 ```bash
-docker buildx version
+# Either form is accepted for each feature:
+docker buildx version || docker-buildx version
+docker compose version || docker-compose version
+uv run quiver doctor
 ```
 
-`quiver doctor` reports this as **Buildx**. Install/enable the Buildx plugin for the Docker CLI you use, then rerun `doctor`.
+When `docker buildx` or `docker compose` is unavailable but `docker-buildx` or `docker-compose` is on `PATH`, Quiver detects and uses the standalone binary automatically. It passes the selected Quiver Docker context through `DOCKER_CONTEXT` for that fallback.
 
 ### Why `quiver image pull base` currently fails
 
@@ -97,7 +100,7 @@ The profile command uses the local `quiver-base:stable` as its parent and prints
 
 ### 2.4 Direct Docker fallback when Buildx is unavailable
 
-If `docker buildx version` fails, use your native architecture and direct Docker builds instead. This is appropriate for local native builds; it is not a replacement for a multi-platform Buildx pipeline.
+If `uv run quiver doctor` still reports **Buildx** unavailable (neither `docker buildx` nor `docker-buildx` works), use your native architecture and direct Docker builds instead. This is appropriate for local native builds; it is not a replacement for a multi-platform Buildx pipeline.
 
 **ARM64:**
 
@@ -263,8 +266,8 @@ Audit metadata and recordings live under the assessment workspace's `.logs/` dir
 | --- | --- |
 | `pull access denied for quiver-base` | Build `quiver-base:stable` locally, or specify a fully-qualified image reference that you can pull. No public Quiver registry is configured by this repository. |
 | Provenance-variable error | Export the matching `QUIVER_*` variables. On ARM64 also download and verify `images/base/rootfs/archlinuxarm-aarch64.tar.gz`. |
-| `docker: unknown command: docker buildx` | Install/enable Docker Buildx, or use the direct native `docker build` fallback above. |
-| `docker compose` unavailable | Install Docker Compose v2 before using Compose services such as BloodHound CE. |
+| Buildx unavailable in `quiver doctor` | Ensure either `docker buildx` or `docker-buildx` is on `PATH`, or use the direct native `docker build` fallback above. |
+| Compose unavailable in `quiver doctor` | Ensure either `docker compose` or `docker-compose` is on `PATH` before using Compose services such as BloodHound CE. |
 | Existing assessment rejects `--image` | Use `--reconfigure`, edit the config, or destroy/recreate the assessment. |
 | VPN start fails | Run `quiver doctor`; confirm Linux containers, TUN capability, a valid full-tunnel profile, and VPN endpoint reachability. |
 | Image/profile build fails during package installation | Review the required/optional package report. Required packages fail the build; unavailable optional packages are logged and skipped. |

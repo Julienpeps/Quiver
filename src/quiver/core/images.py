@@ -118,7 +118,6 @@ class ImageManager:
         if not dockerfile.is_file():
             raise ImageError(f"no Dockerfile for profile {profile} on {target}")
         args = [
-            "buildx",
             "build",
             "--load",
             "--platform",
@@ -136,7 +135,7 @@ class ImageManager:
             args.extend(self._provenance_args(target))
         args.append(str(self.repository_root))
         try:
-            self.docker.run(*args)
+            self.docker.buildx(*args)
         except DockerError as error:
             raise ImageError(f"failed to build {profile} for {target}: {error}\n{report.text()}") from error
         return report

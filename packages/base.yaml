@@ -1,0 +1,30 @@
+profile: base
+inherits: null
+packages:
+  - ca-certificates
+  - curl
+  - git
+  - iproute2
+  - iptables-nft
+  - nftables
+  - novnc
+  - openvpn
+  - python
+  - python-pyyaml
+  - supervisor
+  - tigervnc
+  - util-linux
+  - websockify
+  - wireguard-go
+  - wireguard-tools
+  - xfce4
+  - xfce4-terminal
+  - zsh
+arch:
+  amd64:
+    packages:
+      - blackarch-keyring
+    optional: []
+  arm64:
+    packages: []
+    optional: []

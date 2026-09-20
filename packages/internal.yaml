@@ -1,0 +1,17 @@
+profile: internal
+inherits: base
+packages:
+  - bloodhound-python
+  - impacket
+  - netexec
+  - nmap
+  - responder
+  - tcpdump
+arch:
+  amd64:
+    packages: []
+  arm64:
+    packages: []
+    optional:
+      - netexec
+      - responder

@@ -1,0 +1,21 @@
+profile: web
+inherits: base
+packages:
+  - burpsuite
+  - ffuf
+  - gobuster
+  - nikto
+  - nmap
+  - sqlmap
+  - whatweb
+  - wpscan
+arch:
+  amd64:
+    packages: []
+    optional:
+      - feroxbuster
+  arm64:
+    packages: []
+    optional:
+      - burpsuite
+      - feroxbuster

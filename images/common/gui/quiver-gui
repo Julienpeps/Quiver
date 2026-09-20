@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -eu
+
+runtime_config=/run/quiver/config.yaml
+password_file=/workspace/.services/gui-password
+vnc_password_file=/run/quiver/gui.vnc-password
+
+mapfile -t values < <(python - "$runtime_config" <<'PYTHON'
+import sys
+import yaml
+
+config = yaml.safe_load(open(sys.argv[1], encoding="utf-8")) or {}
+gui = config.get("gui") or {}
+print(gui.get("container_port", 6080))
+print("true" if gui.get("authentication", True) else "false")
+print(gui.get("initial_geometry", "1600x1000"))
+PYTHON
+)
+port="${values[0]}"
+authentication="${values[1]}"
+geometry="${values[2]}"
+
+vnc_args=(-geometry "$geometry" -localhost yes -AcceptSetDesktopSize -SendClipboard=on -AcceptClipboard=on)
+if [[ "$authentication" == "true" ]]; then
+    if [[ ! -r "$password_file" ]]; then
+        echo "GUI authentication is enabled but no VNC password file exists" >&2
+        exit 64
+    fi
+    umask 077
+    printf '%s' "$(<"$password_file")" | vncpasswd -f > "$vnc_password_file"
+    vnc_args+=(-rfbauth "$vnc_password_file")
+else
+    vnc_args+=(-SecurityTypes None)
+fi
+
+Xvnc :1 "${vnc_args[@]}" &
+vnc_pid=$!
+DISPLAY=:1 xfce4-session &
+xfce_pid=$!
+# The initial GUI terminal is always routed through Quiver's audit wrapper.
+DISPLAY=:1 xfce4-terminal --command /usr/local/bin/quiver-record-shell &
+terminal_pid=$!
+websockify --web /opt/novnc "$port" localhost:5901 &
+websockify_pid=$!
+
+cleanup() {
+    kill "$websockify_pid" "$terminal_pid" "$xfce_pid" "$vnc_pid" 2>/dev/null || true
+    wait "$websockify_pid" "$terminal_pid" "$xfce_pid" "$vnc_pid" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+wait "$websockify_pid"

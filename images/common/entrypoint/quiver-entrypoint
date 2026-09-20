@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -eu
+
+workspace=/workspace
+runtime_config=/run/quiver/config.yaml
+
+if ! mountpoint -q "$workspace"; then
+    echo "Quiver requires a bind-mounted /workspace" >&2
+    exit 64
+fi
+
+if [[ ! -r "$runtime_config" ]]; then
+    echo "Quiver runtime configuration is missing: $runtime_config" >&2
+    exit 64
+fi
+
+install -d -m 0700 \
+    "$workspace/.logs/sessions" \
+    "$workspace/.logs/exec" \
+    "$workspace/.logs/services" \
+    "$workspace/.vpn" \
+    "$workspace/.services" \
+    /etc/supervisor/conf.d
+
+python /usr/local/lib/quiver/generate-supervisor.py "$runtime_config" \
+    /etc/supervisor/conf.d/quiver-runtime.conf
+
+exec /usr/bin/supervisord --nodaemon --configuration /etc/supervisor/supervisord.conf

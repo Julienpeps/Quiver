@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+set -eu
+
+workspace=/workspace
+sessions="$workspace/.logs/sessions"
+recorder="${QUIVER_RECORDER:-script}"
+session_id="${QUIVER_SESSION_ID:-$(date -u +%Y%m%dT%H%M%SZ)-$(od -An -N3 -tx1 /dev/urandom | tr -d ' \n')}"
+session_dir="$sessions/$session_id"
+export QUIVER_SESSION_ID="$session_id"
+
+install -d -m 0700 "$session_dir"
+printf 'source /usr/local/lib/quiver/quiver-audit-hook.zsh\n' > "$session_dir/.zshenv"
+_quiver_metadata_merge() {
+    # Merge fields into host-authored metadata without dropping provenance.
+    if command -v python3 >/dev/null 2>&1; then
+        python3 - "$session_dir/metadata.json" "$session_id" "$recorder" "${SHELL:-/bin/zsh}" "$1" <<'PY'
+import json, sys, os
+from datetime import UTC, datetime
+
+path, session_id, recorder, shell, ended = sys.argv[1:6]
+data = {}
+try:
+    with open(path, encoding="utf-8") as handle:
+        loaded = json.load(handle)
+    if isinstance(loaded, dict):
+        data = loaded
+except (OSError, ValueError):
+    pass
+data["session_id"] = session_id
+data["recorder"] = recorder
+data.setdefault("shell", shell)
+data["started_at"] = data.get("started_at") or datetime.now(UTC).isoformat().replace("+00:00", "Z")
+if ended == "end":
+    data["ended_at"] = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, sort_keys=True, indent=2)
+    handle.write("\n")
+os.chmod(path, 0o600)
+PY
+    else
+        if [[ ! -f "$session_dir/metadata.json" ]]; then
+            printf '{"session_id":"%s","started_at":"%s","recorder":"%s","shell":"%s"}\n' \
+                "$session_id" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$recorder" "${SHELL:-/bin/zsh}" \
+                > "$session_dir/metadata.json"
+        fi
+    fi
+}
+_quiver_metadata_merge start
+touch "$session_dir/commands.jsonl"
+chmod 0600 "$session_dir/commands.jsonl"
+
+shell_command="env ZDOTDIR=$session_dir ${SHELL:-/bin/zsh} -i"
+case "$recorder" in
+    script)
+        script --quiet --log-out "$session_dir/output.ansi" \
+            --log-timing "$session_dir/timing.log" \
+            --command "$shell_command"
+        ;;
+    asciinema)
+        asciinema rec --command "$shell_command" "$session_dir/session.cast"
+        asciinema cat "$session_dir/session.cast" > "$session_dir/output.ansi" || true
+        ;;
+    *)
+        echo "Unsupported Quiver recorder: $recorder" >&2
+        exit 64
+        ;;
+esac
+
+if [[ ! -f "$session_dir/output.ansi" ]]; then
+    : > "$session_dir/output.ansi"
+fi
+sed -E $'s/\x1B\[[0-?]*[ -\/]*[@-~]//g' "$session_dir/output.ansi" > "$session_dir/output.txt" || true
+_quiver_metadata_merge end

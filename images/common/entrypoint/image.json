@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "profile": "base",
+  "version": "development",
+  "git_revision": "unknown",
+  "architecture": "amd64",
+  "blackarch_snapshot": "un-pinned"
+}

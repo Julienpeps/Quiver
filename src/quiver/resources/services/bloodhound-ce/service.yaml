@@ -1,0 +1,22 @@
+id: bloodhound-ce
+display_name: BloodHound CE
+kind: compose
+autostart_default: false
+requires_network: true
+supported_platforms:
+  - linux/amd64
+  - linux/arm64
+compose_services:
+  - bloodhound
+  - postgres
+  - neo4j
+healthcheck:
+  type: http
+  target: http://127.0.0.1:${BLOODHOUND_PORT}/
+  command:
+    - CMD-SHELL
+    - curl -fsS http://127.0.0.1:8080/ || wget -qO- http://127.0.0.1:8080/
+dependency_healthchecks:
+  postgres:
+    - CMD-SHELL
+    - pg_isready -U bloodhound

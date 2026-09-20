@@ -1,0 +1,90 @@
+name: build-images
+
+on:
+  workflow_dispatch:
+    inputs:
+      blackarch_strap_url:
+        description: Immutable BlackArch strap script URL
+        required: true
+        type: string
+      blackarch_strap_sha256:
+        description: SHA-256 for the specified BlackArch strap script
+        required: true
+        type: string
+      archlinuxarm_rootfs_url:
+        description: Immutable Arch Linux ARM aarch64 rootfs URL
+        required: true
+        type: string
+      archlinuxarm_rootfs_sha256:
+        description: SHA-256 for the specified ARM rootfs
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            architecture: amd64
+            runner: ubuntu-24.04
+            dockerfile: images/base/Dockerfile.amd64
+          - platform: linux/arm64
+            architecture: arm64
+            runner: ubuntu-24.04-arm
+            dockerfile: images/base/Dockerfile.arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Download and verify ARM rootfs
+        if: matrix.platform == 'linux/arm64'
+        env:
+          ROOTFS_URL: ${{ inputs.archlinuxarm_rootfs_url }}
+          ROOTFS_SHA256: ${{ inputs.archlinuxarm_rootfs_sha256 }}
+        run: |
+          curl --fail --location --retry 3 "$ROOTFS_URL" --output images/base/rootfs/archlinuxarm-aarch64.tar.gz
+          echo "$ROOTFS_SHA256  images/base/rootfs/archlinuxarm-aarch64.tar.gz" | sha256sum --check --status
+      - name: Build verified base image
+        env:
+          BLACKARCH_STRAP_URL: ${{ inputs.blackarch_strap_url }}
+          BLACKARCH_STRAP_SHA256: ${{ inputs.blackarch_strap_sha256 }}
+          ROOTFS_SHA256: ${{ inputs.archlinuxarm_rootfs_sha256 }}
+        run: |
+          test -n "$BLACKARCH_STRAP_URL"
+          test -n "$BLACKARCH_STRAP_SHA256"
+          docker build --file "${{ matrix.dockerfile }}" \
+            --build-arg "BLACKARCH_STRAP_URL=$BLACKARCH_STRAP_URL" \
+            --build-arg "BLACKARCH_STRAP_SHA256=$BLACKARCH_STRAP_SHA256" \
+            --build-arg "ARCHLINUXARM_ROOTFS_SHA256=$ROOTFS_SHA256" \
+            --tag "quiver-base:${{ matrix.architecture }}" .
+      - name: Build and smoke-test profile images
+        env:
+          BASE_IMAGE: "quiver-base:${{ matrix.architecture }}"
+        run: |
+          for profile in web internal full; do
+            docker build --file "images/profiles/$profile/Dockerfile" \
+              --build-arg "BASE_IMAGE=$BASE_IMAGE" \
+              --tag "quiver-$profile:${{ matrix.architecture }}" . \
+              | tee "/tmp/quiver-build-$profile.log"
+            if grep -q "Skipping unavailable optional package" "/tmp/quiver-build-$profile.log"; then
+              grep "Skipping unavailable optional package" "/tmp/quiver-build-$profile.log" >> "$GITHUB_STEP_SUMMARY" || true
+            fi
+            docker run --rm "quiver-$profile:${{ matrix.architecture }}" \
+              test -x /usr/local/bin/quiver-entrypoint \
+                && test -x /usr/local/bin/quiver-record-shell \
+                && test -f /etc/supervisor/supervisord.conf \
+                && test -f "/etc/quiver/packages/$profile.yaml"
+          done
+          uv run python - <<'PY'
+          from quiver.core.images import load_package_report
+
+          platform = "${{ matrix.platform }}"
+          for profile in ("web", "internal", "full"):
+              report = load_package_report(profile, platform)
+              skipped = ", ".join(report.optional) or "(none)"
+              print(f"[{profile}] architecture-optional packages (build-skipped if unavailable): {skipped}")
+          PY

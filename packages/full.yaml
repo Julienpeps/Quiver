@@ -1,0 +1,19 @@
+profile: full
+inherits: base
+packages:
+  - amass
+  - hashcat
+  - hydra
+  - john
+  - metasploit
+  - nmap
+  - wireshark-cli
+arch:
+  amd64:
+    packages:
+      - blackarch
+  arm64:
+    packages: []
+    optional:
+      - hashcat
+      - metasploit

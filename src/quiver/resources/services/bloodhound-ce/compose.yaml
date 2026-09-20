@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: bloodhound
+    volumes:
+      - ${BLOODHOUND_DATA_DIR}/postgres:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  neo4j:
+    image: neo4j:5-community
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD}
+    volumes:
+      - ${BLOODHOUND_DATA_DIR}/neo4j:/data
+    restart: unless-stopped
+
+  bloodhound:
+    image: ghcr.io/specterops/bloodhound:v6.7.0
+    depends_on:
+      - postgres
+      - neo4j
+    environment:
+      BH_DATABASE_HOST: postgres
+      BH_DATABASE_USER: ${POSTGRES_USER}
+      BH_DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+      BH_DATABASE_NAME: bloodhound
+      BH_GRAPH_DATABASE_HOST: neo4j
+      BH_GRAPH_DATABASE_USER: neo4j
+      BH_GRAPH_DATABASE_PASSWORD: ${NEO4J_PASSWORD}
+    ports:
+      - ${BLOODHOUND_HOST_IP:-127.0.0.1}:${BLOODHOUND_PORT}:8080
+    restart: unless-stopped

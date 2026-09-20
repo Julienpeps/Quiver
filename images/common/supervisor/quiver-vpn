@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+set -eu
+# Supervisor program: install a fail-closed policy before starting a VPN client.
+set -o pipefail
+
+runtime_config=/run/quiver/config.yaml
+workspace=/workspace
+status_file="$workspace/.vpn/vpn-status.json"
+
+read_config() {
+    python - "$runtime_config" <<'PYTHON'
+import sys
+import yaml
+
+config = yaml.safe_load(open(sys.argv[1], encoding="utf-8")) or {}
+vpn = config.get("vpn") or {}
+if not vpn.get("enabled"):
+    raise SystemExit(0)
+profile = vpn.get("config")
+if not profile:
+    raise SystemExit("vpn.config is required")
+if not profile.startswith("/"):
+    profile = "/workspace/" + profile
+print(vpn.get("type", "auto"))
+print(profile)
+print((vpn.get("healthcheck") or {}).get("timeout_seconds", 30))
+print("true" if vpn.get("full_tunnel", True) else "false")
+print("true" if (vpn.get("healthcheck") or {}).get("require_interface", True) else "false")
+PYTHON
+}
+
+write_status() {
+    local state=$1
+    local detail=${2:-}
+    local handshake=${3:-}
+    if [[ -n "$handshake" ]]; then
+        printf '{"state":"%s","interface":"%s","detail":"%s","handshake":"%s"}\n' \
+            "$state" "$interface" "$detail" "$handshake" >"$status_file"
+    else
+        printf '{"state":"%s","interface":"%s","detail":"%s"}\n' \
+            "$state" "$interface" "$detail" >"$status_file"
+    fi
+}
+
+mapfile -t values < <(read_config)
+vpn_type="${values[0]:-}"
+profile="${values[1]:-}"
+timeout="${values[2]:-30}"
+full_tunnel="${values[3]:-true}"
+require_interface="${values[4]:-true}"
+
+if [[ -z "$vpn_type" ]]; then
+    exit 0
+fi
+if [[ ! -r "$profile" ]]; then
+    echo "VPN profile is not readable: $profile" >&2
+    exit 64
+fi
+
+if [[ "$vpn_type" == "auto" ]]; then
+    if grep -qE '^\s*\[Interface\]\s*$' "$profile"; then
+        vpn_type=wireguard
+    else
+        vpn_type=openvpn
+    fi
+fi
+case "$vpn_type" in
+    openvpn) interface=tun0 ;;
+    wireguard) interface="$(basename "${profile%.*}")" ;;
+    *) echo "Unsupported VPN type: $vpn_type" >&2; exit 64 ;;
+esac
+
+# Endpoint DNS is resolved by quiver-killswitch before it installs the policy.
+# The policy remains installed when this program exits or Supervisor restarts it.
+/usr/local/lib/quiver/quiver-killswitch.py --config "$runtime_config" --interface "$interface"
+write_status connecting
+
+wait_for_interface() {
+    local elapsed=0
+    while (( elapsed < timeout )); do
+        if ip link show "$interface" >/dev/null 2>&1; then
+            write_status connected
+            return 0
+        fi
+        if ! kill -0 "$vpn_pid" >/dev/null 2>&1; then
+            wait "$vpn_pid"
+            return 1
+        fi
+        sleep 1
+        ((elapsed += 1))
+    done
+    write_status failed "interface did not appear before health timeout"
+    return 1
+}
+
+# Wait for a recent WireGuard handshake where the endpoint reports one.
+wait_for_handshake() {
+    local elapsed=0
+    while (( elapsed < timeout )); do
+        if wg show "$interface" 2>/dev/null | grep -q 'latest handshake'; then
+            write_status connected "" "yes"
+            return 0
+        fi
+        if ! kill -0 "$vpn_pid" >/dev/null 2>&1; then
+            return 1
+        fi
+        sleep 1
+        ((elapsed += 1))
+    done
+    write_status connected "no recent WireGuard handshake" "no"
+    return 0
+}
+
+case "$vpn_type" in
+    openvpn)
+        openvpn_args=(--config "$profile")
+        if [[ "$full_tunnel" == "true" ]]; then
+            openvpn_args+=(--redirect-gateway def1)
+        fi
+        openvpn "${openvpn_args[@]}" &
+        vpn_pid=$!
+        if [[ "$require_interface" == "true" ]]; then
+            wait_for_interface || exit 1
+        else
+            sleep 1
+            if ! kill -0 "$vpn_pid" >/dev/null 2>&1; then
+                wait "$vpn_pid"
+                write_status failed "OpenVPN process exited during startup"
+                exit 1
+            fi
+            write_status connected
+        fi
+        if ! wait "$vpn_pid"; then
+            write_status failed "OpenVPN process exited"
+        else
+            write_status failed "OpenVPN process stopped"
+        fi
+        exit 1
+        ;;
+    wireguard)
+        wg_up_error=""
+        if ! wg-quick up "$profile" 2>/tmp/quiver-wg-err; then
+            wg_up_error=$(cat /tmp/quiver-wg-err 2>/dev/null || true)
+            # Userspace fallback when the host kernel lacks the WireGuard module.
+            if printf '%s' "$wg_up_error" | grep -qiE 'module|no such file|ENOENT' \
+                && command -v wg-quick-go >/dev/null 2>&1; then
+                wg-quick-go up "$profile" || {
+                    write_status failed "WireGuard setup failed: ${wg_up_error}"
+                    exit 1
+                }
+            else
+                write_status failed "WireGuard setup failed: ${wg_up_error}"
+                exit 1
+            fi
+        fi
+        rm -f /tmp/quiver-wg-err
+        vpn_pid=$$
+        if [[ "$require_interface" == "true" ]] && ! ip link show "$interface" >/dev/null 2>&1; then
+            write_status failed "WireGuard interface was not created"
+            exit 1
+        fi
+        write_status connecting
+        wait_for_handshake
+        trap 'wg-quick down "$profile" || true; write_status disconnected' EXIT INT TERM
+        while :; do sleep 3600; done
+        ;;
+esac

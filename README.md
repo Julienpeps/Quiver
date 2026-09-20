@@ -104,4 +104,5 @@ docs/              implementation specification
 .github/workflows/ unit/integration tests, multi-arch image build, release publishing
 ```
 
-The full v1 implementation specification is at [docs/implementation-spec.md](docs/implementation-spec.md).
+- [User guide](docs/user-guide.md): verified local builds, image selection, assessment operations, VPN, GUI, services, audit, troubleshooting, and publishing.
+- [Implementation specification](docs/implementation-spec.md): full v1 design and acceptance criteria.

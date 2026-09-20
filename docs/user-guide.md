@@ -37,9 +37,7 @@ This repository has a release workflow but does **not** currently publish those 
 
 ## 2. Build images locally
 
-Quiver deliberately refuses to build its base image without verified provenance. The base image downloads the BlackArch strap script; ARM builds also consume an Arch Linux ARM rootfs. You must supply a trusted, pinned artifact URL and SHA-256 for each input.
-
-Do **not** treat a checksum calculated from the same untrusted download as verification. Obtain the SHA-256 from a signed upstream release/checksum or another trusted channel, compare it before building, and record the URL and hash with your assessment build records. If an upstream only exposes mutable `latest` URLs, first copy the verified artifact to an immutable internal artifact store and use that URL.
+Base builds are self-contained. The Dockerfiles download the BlackArch strap script and, on ARM64, bootstrap from the Arch Linux ARM rootfs. They require network access during the build but no Quiver environment variables, build arguments, or host-side rootfs download.
 
 ### 2.1 Choose the target platform
 
@@ -52,29 +50,7 @@ docker version --format '{{.Server.Arch}}'
 
 `quiver image build` defaults to the Docker daemon's native platform. On an Apple-silicon/OrbStack host this is normally `linux/arm64`.
 
-### 2.2 Set verified provenance inputs
-
-Set these in the shell that runs the build. The environment variable names include `QUIVER_` even though the CLI's error message displays the Docker build-argument names without that prefix.
-
-```bash
-# Required for every base build. Replace with an immutable, verified artifact.
-export QUIVER_BLACKARCH_STRAP_URL='https://artifacts.example.net/blackarch/strap-<verified-version>.sh'
-export QUIVER_BLACKARCH_STRAP_SHA256='<64-hex-character-sha256>'
-
-# Required only for linux/arm64. Download the verified archive to the required path.
-export QUIVER_ARCHLINUXARM_ROOTFS_SHA256='<64-hex-character-sha256>'
-export ARCHLINUXARM_ROOTFS_URL='https://artifacts.example.net/archlinuxarm/ArchLinuxARM-aarch64-<verified-version>.tar.gz'
-
-mkdir -p images/base/rootfs
-curl --fail --location --retry 3 "$ARCHLINUXARM_ROOTFS_URL" \
-  --output images/base/rootfs/archlinuxarm-aarch64.tar.gz
-printf '%s  %s\n' "$QUIVER_ARCHLINUXARM_ROOTFS_SHA256" \
-  images/base/rootfs/archlinuxarm-aarch64.tar.gz | shasum -a 256 -c -
-```
-
-For an amd64 build, omit the ARM rootfs download and `QUIVER_ARCHLINUXARM_ROOTFS_SHA256`.
-
-### 2.3 Build with Quiver (Buildx available)
+### 2.2 Build with Quiver (Buildx available)
 
 From the repository root:
 
@@ -98,32 +74,23 @@ uv run quiver image build full
 
 The profile command uses the local `quiver-base:stable` as its parent and prints the resolved required/optional package report. `full` is the largest image.
 
-### 2.4 Direct Docker fallback when Buildx is unavailable
+### 2.3 Direct Docker fallback when Buildx is unavailable
 
 If `uv run quiver doctor` still reports **Buildx** unavailable (neither `docker buildx` nor `docker-buildx` works), use your native architecture and direct Docker builds instead. This is appropriate for local native builds; it is not a replacement for a multi-platform Buildx pipeline.
 
 **ARM64:**
 
 ```bash
-# Prerequisites: export the three QUIVER_* values and download/verify the rootfs
-# as described above.
 docker build \
   --file images/base/Dockerfile.arm64 \
-  --build-arg "BLACKARCH_STRAP_URL=$QUIVER_BLACKARCH_STRAP_URL" \
-  --build-arg "BLACKARCH_STRAP_SHA256=$QUIVER_BLACKARCH_STRAP_SHA256" \
-  --build-arg "ARCHLINUXARM_ROOTFS_SHA256=$QUIVER_ARCHLINUXARM_ROOTFS_SHA256" \
   --tag quiver-base:stable .
 ```
 
 **AMD64:**
 
 ```bash
-# Prerequisites: export QUIVER_BLACKARCH_STRAP_URL and
-# QUIVER_BLACKARCH_STRAP_SHA256.
 docker build \
   --file images/base/Dockerfile.amd64 \
-  --build-arg "BLACKARCH_STRAP_URL=$QUIVER_BLACKARCH_STRAP_URL" \
-  --build-arg "BLACKARCH_STRAP_SHA256=$QUIVER_BLACKARCH_STRAP_SHA256" \
   --tag quiver-base:stable .
 ```
 
@@ -265,7 +232,7 @@ Audit metadata and recordings live under the assessment workspace's `.logs/` dir
 | Symptom | Resolution |
 | --- | --- |
 | `pull access denied for quiver-base` | Build `quiver-base:stable` locally, or specify a fully-qualified image reference that you can pull. No public Quiver registry is configured by this repository. |
-| Provenance-variable error | Export the matching `QUIVER_*` variables. On ARM64 also download and verify `images/base/rootfs/archlinuxarm-aarch64.tar.gz`. |
+| Base image build fails while downloading bootstrap files | Confirm the build has network access to BlackArch and Arch Linux ARM mirrors, then retry. |
 | Buildx unavailable in `quiver doctor` | Ensure either `docker buildx` or `docker-buildx` is on `PATH`, or use the direct native `docker build` fallback above. |
 | Compose unavailable in `quiver doctor` | Ensure either `docker compose` or `docker-compose` is on `PATH` before using Compose services such as BloodHound CE. |
 | Existing assessment rejects `--image` | Use `--reconfigure`, edit the config, or destroy/recreate the assessment. |
@@ -278,8 +245,7 @@ The `release-images` GitHub Actions workflow builds both architectures and publi
 
 - a repository such as `ghcr.io/<owner>/quiver`;
 - a version and date tag;
-- immutable, verified BlackArch strap URL/SHA-256;
-- immutable, verified ARM rootfs URL/SHA-256.
+- network access for the base-image bootstrap downloads.
 
 It publishes architecture-specific tags and multi-platform `<version>`, `<date>`, and `stable` manifests. Team members can then use a fully-qualified reference, for example:
 

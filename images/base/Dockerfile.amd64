@@ -2,22 +2,16 @@
 # Build from the repository root: docker build -f images/base/Dockerfile.amd64 .
 FROM archlinux:base-devel
 
-ARG BLACKARCH_STRAP_URL
-ARG BLACKARCH_STRAP_SHA256
-
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-RUN test -n "$BLACKARCH_STRAP_URL" \
-    && test -n "$BLACKARCH_STRAP_SHA256" \
-    && pacman-key --init \
+RUN pacman-key --init \
     && pacman-key --populate archlinux \
     && pacman -Syu --noconfirm --needed \
         asciinema ca-certificates curl git iproute2 iptables-nft nftables \
         novnc openvpn python python-pyyaml supervisor tigervnc util-linux \
         websockify wireguard-go wireguard-tools xorg-xauth xterm \
         xfce4 xfce4-terminal zsh \
-    && curl --fail --location --silent --show-error "$BLACKARCH_STRAP_URL" --output /tmp/strap.sh \
-    && echo "$BLACKARCH_STRAP_SHA256  /tmp/strap.sh" | sha256sum --check --status \
+    && curl --fail --location --silent --show-error https://blackarch.org/strap.sh --output /tmp/strap.sh \
     && chmod +x /tmp/strap.sh \
     && /tmp/strap.sh \
     && rm -f /tmp/strap.sh \

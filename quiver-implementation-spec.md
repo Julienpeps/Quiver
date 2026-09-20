@@ -120,7 +120,7 @@ BlackArch maintains official Docker build material and its repository provides a
 - **amd64:** official Arch Linux OCI base -> enable BlackArch repository -> common Quiver provisioning.
 - **arm64:** Arch Linux ARM AArch64 root filesystem -> enable BlackArch repository -> common Quiver provisioning.
 
-Do not depend on the BlackArch Docker rootfs artifacts as a permanent base contract because their official Docker repository describes short artifact retention. Quiver CI SHOULD pin root/base provenance and BlackArch bootstrap material to known digests/checksums at build time.
+Do not depend on the BlackArch Docker rootfs artifacts as a permanent base contract because their official Docker repository describes short artifact retention. Quiver's architecture-specific Dockerfiles bootstrap their own upstream roots; local and CI builds MUST NOT require caller-supplied bootstrap URLs or checksums.
 
 Profile package lists MUST permit architecture conditions. A profile build MUST fail with a readable package report if a mandatory package is unavailable for that architecture.
 
@@ -261,8 +261,7 @@ Recommended repository layout:
 |-- images/
 |   |-- base/
 |   |   |-- Dockerfile.amd64
-|   |   |-- Dockerfile.arm64
-|   |   `-- rootfs/
+|   |   `-- Dockerfile.arm64
 |   |-- common/
 |   |   |-- entrypoint/
 |   |   |-- supervisor/

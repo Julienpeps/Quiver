@@ -1,35 +1,30 @@
 # syntax=docker/dockerfile:1
-# The verified Arch Linux ARM rootfs is downloaded by CI/local build tooling to
-# images/base/rootfs/archlinuxarm-aarch64.tar.gz before this Dockerfile runs.
+# Bootstrap an Arch Linux ARM root filesystem without host-side build inputs.
+FROM alpine:3.21 AS archlinuxarm-rootfs
+
+RUN apk add --no-cache curl tar \
+    && mkdir -p /rootfs \
+    && curl --fail --location --retry 3 \
+        http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz \
+        --output /tmp/rootfs.tar.gz \
+    && tar -xzf /tmp/rootfs.tar.gz -C /rootfs \
+    && rm -f /tmp/rootfs.tar.gz
+
 FROM scratch AS archlinuxarm-root
-
-ARG ARCHLINUXARM_ROOTFS_SHA256
-
-COPY images/base/rootfs/archlinuxarm-aarch64.tar.gz /rootfs.tar.gz
-RUN test -n "$ARCHLINUXARM_ROOTFS_SHA256" \
-    && echo "$ARCHLINUXARM_ROOTFS_SHA256  /rootfs.tar.gz" | sha256sum --check --status \
-    && mkdir -p /root \
-    && tar -xzf /rootfs.tar.gz -C /root \
-    && rm -f /rootfs.tar.gz
+COPY --from=archlinuxarm-rootfs /rootfs /
 
 FROM archlinuxarm-root
 
-ARG BLACKARCH_STRAP_URL
-ARG BLACKARCH_STRAP_SHA256
-
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-RUN test -n "$BLACKARCH_STRAP_SHA256" \
-    && test -n "$ARCHLINUXARM_ROOTFS_SHA256" \
-    && pacman-key --init \
+RUN pacman-key --init \
     && pacman-key --populate archlinuxarm \
     && pacman -Syu --noconfirm --needed \
         asciinema ca-certificates curl git iproute2 iptables-nft nftables \
         novnc openvpn python python-pyyaml supervisor tigervnc util-linux \
         websockify wireguard-go wireguard-tools xorg-xauth xterm \
         xfce4 xfce4-terminal zsh \
-    && curl --fail --location --silent --show-error "$BLACKARCH_STRAP_URL" --output /tmp/strap.sh \
-    && echo "$BLACKARCH_STRAP_SHA256  /tmp/strap.sh" | sha256sum --check --status \
+    && curl --fail --location --silent --show-error https://blackarch.org/strap.sh --output /tmp/strap.sh \
     && chmod +x /tmp/strap.sh \
     && /tmp/strap.sh \
     && rm -f /tmp/strap.sh \

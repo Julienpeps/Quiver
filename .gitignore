@@ -4,4 +4,3 @@ __pycache__/
 .ruff_cache/
 *.py[cod]
 .DS_Store
-images/base/rootfs/*.tar.gz

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -131,31 +130,12 @@ class ImageManager:
             "--build-arg",
             f"OPTIONAL_PACKAGES={' '.join(report.optional)}",
         ]
-        if profile == "base":
-            args.extend(self._provenance_args(target))
         args.append(str(self.repository_root))
         try:
             self.docker.buildx(*args)
         except DockerError as error:
             raise ImageError(f"failed to build {profile} for {target}: {error}\n{report.text()}") from error
         return report
-
-    def _provenance_args(self, platform: Platform) -> list[str]:
-        values = {
-            "BLACKARCH_STRAP_URL": os.environ.get("QUIVER_BLACKARCH_STRAP_URL", ""),
-            "BLACKARCH_STRAP_SHA256": os.environ.get("QUIVER_BLACKARCH_STRAP_SHA256", ""),
-        }
-        if platform == "linux/arm64":
-            values["ARCHLINUXARM_ROOTFS_SHA256"] = os.environ.get(
-                "QUIVER_ARCHLINUXARM_ROOTFS_SHA256", ""
-            )
-        missing = [name for name, value in values.items() if not value]
-        if missing:
-            raise ImageError(
-                "base image build requires verified provenance environment variables: "
-                + ", ".join(missing)
-            )
-        return [item for name, value in values.items() for item in ("--build-arg", f"{name}={value}")]
 
     def _native_platform(self) -> Platform:
         """Return the Docker daemon's native Linux platform."""

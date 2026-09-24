@@ -7,9 +7,12 @@ packages:
   - nmap
   - responder
   - tcpdump
+  - hydra
+  - masscan
 arch:
   amd64:
-    packages: []
+    packages:
+      - metasploit
   arm64:
     packages: []
     optional:

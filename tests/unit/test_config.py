@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+import yaml
 from pydantic import ValidationError
 
 from quiver.models.config import (
@@ -46,6 +47,23 @@ def test_config_round_trip_preserves_nested_values(tmp_path: Path) -> None:
 
     assert load_config(path) == config
     assert path.stat().st_mode & 0o777 == 0o600
+
+
+def test_legacy_gui_authentication_is_ignored_on_rewrite(tmp_path: Path) -> None:
+    config = AssessmentConfig.model_validate(
+        {
+            "schema_version": 1,
+            "name": "demo",
+            "image": {"profile": "base"},
+            "workspace": {"path": str(tmp_path / "workspace")},
+            "gui": {"authentication": True},
+        }
+    )
+
+    path = tmp_path / ".quiver.yaml"
+    write_config(path, config)
+
+    assert "authentication" not in yaml.safe_load(path.read_text())["gui"]
 
 
 def test_config_rejects_unknown_top_level_field(tmp_path: Path) -> None:

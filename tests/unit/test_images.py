@@ -17,6 +17,19 @@ def test_package_report_resolves_required_and_optional_arch_packages() -> None:
     assert "Platform: linux/arm64" in report.text()
 
 
+def test_cloud_profile_has_cross_arch_provider_clis_and_amd64_specialists() -> None:
+    arm64 = load_package_report("cloud", "linux/arm64")
+    amd64 = load_package_report("cloud", "linux/amd64")
+
+    assert {"aws-cli-v2", "azure-cli", "kubectl", "trivy"} <= set(arm64.required)
+    assert "prowler" not in arm64.required
+    assert "prowler" in amd64.required
+    dockerfile = Path(__file__).parents[2] / "images" / "profiles" / "cloud" / "Dockerfile"
+    contents = dockerfile.read_text()
+    assert "google-cloud-cli-linux-${gcloud_arch}.tar.gz" in contents
+    assert "gcloud_arch=arm" in contents
+
+
 def test_unknown_profile_has_actionable_error() -> None:
     with pytest.raises(ImageError, match="unknown image profile"):
         load_package_report("unknown", "linux/amd64")
@@ -37,8 +50,9 @@ def test_build_constructs_buildx_command_with_arch_report(tmp_path: Path) -> Non
     report = ImageManager(DockerBackend(runner=runner), repository).build("web", "linux/arm64")
 
     assert report.platform == "linux/arm64"
-    assert calls[0][:5] == ["docker", "buildx", "build", "--load", "--platform"]
-    assert "OPTIONAL_PACKAGES=burpsuite feroxbuster" in calls[0]
+    build = next(call for call in calls if "build" in call)
+    assert build[:5] == ["docker", "buildx", "build", "--load", "--platform"]
+    assert "OPTIONAL_PACKAGES=burpsuite feroxbuster" in build
 
 
 def test_base_build_requires_no_provenance_environment_variables(tmp_path: Path) -> None:

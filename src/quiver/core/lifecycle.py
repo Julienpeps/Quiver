@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 import yaml
 
+from quiver.core.dotfiles import ensure_dotfiles_directory
 from quiver.docker.backend import DockerBackend, DockerConflictError, DockerError
 from quiver.docker.inspect import (
     ASSESSMENT_LABEL,
@@ -80,8 +81,9 @@ def _host_gid() -> int | None:
 class LifecycleManager:
     """Create and remove disposable primary containers for one assessment."""
 
-    def __init__(self, docker: DockerBackend) -> None:
+    def __init__(self, docker: DockerBackend, dotfiles_root: Path | None = None) -> None:
         self.docker = docker
+        self.dotfiles_root = dotfiles_root
 
     def status(self, config: AssessmentConfig) -> AssessmentStatus:
         """Return primary container state without creating Docker resources."""
@@ -120,10 +122,12 @@ class LifecycleManager:
         if config.docker.network.mode == "bridge":
             self._ensure_network(config.name)
         runtime_config = self._write_runtime_config(config)
-        args = self._create_args(config, image, runtime_config)
+        dotfiles = ensure_dotfiles_directory(self.dotfiles_root) if self.dotfiles_root else None
+        args = self._create_args(config, image, runtime_config, dotfiles)
         try:
             self.docker.run(*args)
             self.docker.run("start", primary_container_name(config.name))
+            self._install_custom_packages(config)
             if config.vpn.enabled:
                 self._wait_for_vpn(config)
             self._service_manager(config).start_autostart()
@@ -213,6 +217,21 @@ class LifecycleManager:
             raise VpnError(f"invalid VPN profile: {error}") from error
         if config.vpn.full_tunnel and profile.type == "wireguard" and not profile.full_tunnel:
             raise VpnError("WireGuard profile does not route the IPv4 default route")
+
+    def _install_custom_packages(self, config: AssessmentConfig) -> None:
+        """Install user-requested Arch packages in the disposable container."""
+        if not config.custom_packages:
+            return
+        self.docker.run(
+            "exec",
+            primary_container_name(config.name),
+            "pacman",
+            "-Sy",
+            "--noconfirm",
+            "--needed",
+            "--",
+            *config.custom_packages,
+        )
 
     def _wait_for_vpn(self, config: AssessmentConfig) -> None:
         deadline = time.monotonic() + config.vpn.healthcheck.timeout_seconds
@@ -331,7 +350,9 @@ class LifecycleManager:
             network,
         )
 
-    def _create_args(self, config: AssessmentConfig, image: str, runtime_config: Path) -> list[str]:
+    def _create_args(
+        self, config: AssessmentConfig, image: str, runtime_config: Path, dotfiles: Path | None = None
+    ) -> list[str]:
         workspace = Path(config.workspace.path)
         args = [
             "create",
@@ -353,6 +374,20 @@ class LifecycleManager:
             "--mount",
             f"type=bind,src={runtime_config},dst=/run/quiver/config.yaml,readonly",
         ]
+        if dotfiles is not None:
+            args.extend(
+                (
+                    "--mount",
+                    (
+                        "type=bind,"
+                        f"src={dotfiles},dst={config.workspace.container_path}/.quiver/home/.config,readonly"
+                    ),
+                )
+            )
+        uid = _host_uid()
+        gid = _host_gid()
+        if uid is not None and gid is not None:
+            args.extend(("--env", f"QUIVER_HOST_UID={uid}", "--env", f"QUIVER_HOST_GID={gid}"))
         if config.image.platform != "auto":
             args.extend(("--platform", config.image.platform))
         if config.docker.privileged:

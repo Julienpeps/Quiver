@@ -14,6 +14,22 @@ if [[ ! -r "$runtime_config" ]]; then
     exit 64
 fi
 
+# Interactive shells execute as the invoking host UID/GID. Create a matching
+# account so Fish, tools that consult passwd(5), and sudo work normally.
+if [[ ${QUIVER_HOST_UID:-} =~ ^[0-9]+$ && ${QUIVER_HOST_GID:-} =~ ^[0-9]+$ \
+    && ${QUIVER_HOST_UID} != 0 ]]; then
+    if ! getent group "$QUIVER_HOST_GID" >/dev/null; then
+        groupadd --gid "$QUIVER_HOST_GID" quiver-host
+    fi
+    if ! getent passwd "$QUIVER_HOST_UID" >/dev/null; then
+        useradd --no-create-home --uid "$QUIVER_HOST_UID" --gid "$QUIVER_HOST_GID" \
+            --home-dir "$workspace/.quiver/home" --shell /usr/bin/fish quiver
+    fi
+    install -d -m 0750 /etc/sudoers.d
+    printf '#%s ALL=(ALL) NOPASSWD: ALL\n' "$QUIVER_HOST_UID" > /etc/sudoers.d/quiver-host
+    chmod 0440 /etc/sudoers.d/quiver-host
+fi
+
 install -d -m 0700 \
     "$workspace/.logs/sessions" \
     "$workspace/.logs/exec" \

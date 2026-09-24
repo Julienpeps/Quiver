@@ -400,7 +400,6 @@ gui:
   container_port: 6080
   host_ip: 127.0.0.1
   host_port: null
-  authentication: true
   clipboard: true
   dynamic_resize: true
   initial_geometry: 1600x1000
@@ -822,9 +821,7 @@ Enable TigerVNC `AcceptSetDesktopSize` and noVNC remote resize. Browser window s
 
 ### 12.5 Authentication
 
-Even though the published endpoint is loopback-only, GUI authentication is enabled by default. Generate a per-assessment random credential on first GUI enablement and persist it in the assessment configuration or an implementation-owned credential file with user-only permissions.
-
-The authentication mechanism MAY be standard TigerVNC authentication. Do not expose VNC's internal TCP port to the host; only publish noVNC/Websockify.
+The GUI is intentionally unauthenticated because Docker publishes noVNC only to the loopback trust boundary by default. Do not expose VNC's internal TCP port to the host; only publish noVNC/Websockify. A non-loopback GUI exposure requires a separate authentication and TLS design.
 
 ### 12.6 TLS
 
@@ -1269,7 +1266,7 @@ Run separately for OpenVPN and WireGuard.
 Automate where practical with a browser driver:
 
 - noVNC page loads from loopback-published port;
-- authentication required;
+- no authentication prompt on the loopback-only endpoint;
 - XFCE becomes available;
 - resize request changes X desktop geometry;
 - clipboard works both directions for text;

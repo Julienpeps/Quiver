@@ -66,6 +66,31 @@ def test_backend_falls_back_to_standalone_plugin_with_context(
     assert commands[-1][0] == [f"docker-{plugin}", "version"]
 
 
+def test_plugin_probes_version_before_first_non_version_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands: list[list[str]] = []
+
+    def runner(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        commands.append(args)
+        if args[0] == "docker" and args[-1] == "version":
+            return subprocess.CompletedProcess(args, 1, "", "unknown command: docker buildx")
+        if args[0] == "docker":
+            return subprocess.CompletedProcess(args, 125, "", "unknown flag: --load")
+        return subprocess.CompletedProcess(args, 0, "built", "")
+
+    monkeypatch.setattr(
+        "quiver.docker.backend.shutil.which",
+        lambda executable: "/opt/homebrew/bin/docker-buildx" if executable == "docker-buildx" else None,
+    )
+
+    assert DockerBackend(runner=runner).buildx("build", "--load").stdout == "built"
+    assert commands == [
+        ["docker", "buildx", "version"],
+        ["docker-buildx", "build", "--load"],
+    ]
+
+
 def test_streaming_plugin_probes_before_standalone_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
     commands: list[list[str]] = []
 

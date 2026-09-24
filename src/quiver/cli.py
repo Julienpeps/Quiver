@@ -74,7 +74,7 @@ class AppState:
         return DockerBackend(context=context, on_command=on_command)
 
     def manager(self, config_context: str | None = None) -> LifecycleManager:
-        return LifecycleManager(self.backend(config_context))
+        return LifecycleManager(self.backend(config_context), self.root)
 
     def services(self, config: AssessmentConfig) -> ServiceManager:
         return ServiceManager(self.backend(config.docker.context), config)
@@ -106,6 +106,11 @@ def assessment_completion(incomplete: str) -> list[str]:
         and (entry / ".quiver.yaml").is_file()
         and entry.name.startswith(incomplete)
     )
+
+
+AssessmentName = Annotated[
+    str, typer.Argument(help="Assessment name.", autocompletion=assessment_completion)
+]
 
 
 def service_completion(incomplete: str) -> list[str]:
@@ -144,9 +149,7 @@ def main(
 @app.command()
 def start(
     context: typer.Context,
-    name: Annotated[
-        str, typer.Argument(help="Assessment name.", autocompletion=assessment_completion)
-    ],
+    name: AssessmentName,
     image: Annotated[str | None, typer.Option("--image", help="Profile or image reference.")] = None,
     platform: Annotated[str | None, typer.Option(help="Target image platform.")] = None,
     vpn: Annotated[Path | None, typer.Option(help="VPN profile path.")] = None,
@@ -159,6 +162,7 @@ def start(
     network_name: Annotated[str | None, typer.Option(help="Custom Docker network name.")] = None,
     publish: Annotated[list[str] | None, typer.Option("--publish", "-p", help="Published port mapping.")] = None,
     service: Annotated[list[str] | None, typer.Option("--service", help="Service to enable and autostart.")] = None,
+    packages: Annotated[str | None, typer.Option("--packages", help="Comma-separated Arch packages to install.")] = None,
     gui: Annotated[bool | None, typer.Option("--gui/--no-gui")] = None,
     reconfigure: Annotated[bool, typer.Option(help="Allow creation options to update existing config.")] = False,
     detach: Annotated[bool, typer.Option(help="Start without entering a shell.")] = False,
@@ -179,6 +183,7 @@ def start(
         "network_name": network_name,
         "publish": publish,
         "services": service,
+        "packages": packages,
         "gui": gui,
     }
     try:
@@ -206,7 +211,7 @@ def start(
         _abort(error, 2)
     except ImageUnavailableError as error:
         _abort(error, 4)
-    except (DockerError, LifecycleError) as error:
+    except (DockerError, GuiError, LifecycleError) as error:
         _abort(error, 3)
     except VpnError as error:
         _abort(error, 5)
@@ -223,7 +228,7 @@ def start(
 
 
 @app.command()
-def stop(context: typer.Context, name: Annotated[str, typer.Argument(help="Assessment name.")]) -> None:
+def stop(context: typer.Context, name: AssessmentName) -> None:
     """Stop and remove the disposable primary container."""
     state = _state(context)
     try:
@@ -238,13 +243,14 @@ def stop(context: typer.Context, name: Annotated[str, typer.Argument(help="Asses
 @app.command()
 def edit(
     context: typer.Context,
-    name: Annotated[str, typer.Argument(help="Assessment name.")],
+    name: AssessmentName,
     settings: Annotated[list[str] | None, typer.Option("--set", help="Set field.path=YAML_VALUE.")] = None,
     vpn: Annotated[Path | None, typer.Option(help="Set the VPN profile path.")] = None,
     vpn_credentials: Annotated[
         Path | None, typer.Option("--vpn-credentials", help="Set VPN credentials file.")
     ] = None,
     publish: Annotated[list[str] | None, typer.Option("--publish", "-p", help="Replace published ports.")] = None,
+    packages: Annotated[str | None, typer.Option("--packages", help="Comma-separated Arch packages to add.")] = None,
     restart: Annotated[bool, typer.Option(help="Recreate the container after editing.")] = False,
 ) -> None:
     """Validate and atomically update an assessment configuration."""
@@ -256,9 +262,9 @@ def edit(
         workspace = Path(config.workspace.path)
         with workspace_lock(name, state.root):
             path = config_path(workspace)
-            if settings or vpn or vpn_credentials or publish:
+            if settings or vpn or vpn_credentials or publish or packages is not None:
                 edited = apply_settings(config, settings)
-                edited = apply_start_options(edited, publish=publish)
+                edited = apply_start_options(edited, publish=publish, packages=packages)
                 edited = materialize_vpn_files(edited, vpn, vpn_credentials)
                 replace_config(path, edited)
             else:
@@ -271,7 +277,7 @@ def edit(
         _abort(error, 2)
     except ImageUnavailableError as error:
         _abort(error, 4)
-    except (DockerError, LifecycleError) as error:
+    except (DockerError, GuiError, LifecycleError) as error:
         _abort(error, 3)
     except VpnError as error:
         _abort(error, 5)
@@ -324,9 +330,7 @@ def _service_status_lines(config: AssessmentConfig, manager: ServiceManager, run
 
 
 @app.command()
-def status(
-    context: typer.Context, name: Annotated[str, typer.Argument(help="Assessment name.")]
-) -> None:
+def status(context: typer.Context, name: AssessmentName) -> None:
     """Display the discovered primary-container state."""
     state = _state(context)
     try:
@@ -378,7 +382,7 @@ def list_assessments(context: typer.Context) -> None:
 @app.command()
 def shell(
     context: typer.Context,
-    name: Annotated[str, typer.Argument(help="Assessment name.")],
+    name: AssessmentName,
     asciinema: Annotated[bool, typer.Option(help="Use asciinema rather than script.")] = False,
 ) -> None:
     """Open a recorded interactive shell in a running assessment."""
@@ -397,7 +401,7 @@ def shell(
 @app.command()
 def exec(
     context: typer.Context,
-    name: Annotated[str, typer.Argument(help="Assessment name.")],
+    name: AssessmentName,
     command: Annotated[list[str], typer.Argument(help="Command and arguments, after --.")],
 ) -> None:
     """Execute a non-interactive command and persist its output artifacts."""
@@ -419,7 +423,7 @@ def exec(
 @app.command()
 def logs(
     context: typer.Context,
-    name: Annotated[str, typer.Argument(help="Assessment name.")],
+    name: AssessmentName,
     session_id: Annotated[str | None, typer.Option("--session", help="Recorded session ID.")] = None,
 ) -> None:
     """List recorded sessions or show a session's searchable output."""
@@ -438,7 +442,7 @@ def logs(
 @app.command()
 def replay(
     context: typer.Context,
-    name: Annotated[str, typer.Argument(help="Assessment name.")],
+    name: AssessmentName,
     session_id: Annotated[str, typer.Argument(help="Recorded session ID.")],
 ) -> None:
     """Replay a locally stored terminal recording."""
@@ -457,7 +461,7 @@ def replay(
 @app.command()
 def gui(
     context: typer.Context,
-    name: Annotated[str, typer.Argument(help="Assessment name.")],
+    name: AssessmentName,
     no_open: Annotated[bool, typer.Option("--no-open", help="Do not open a browser.")] = False,
 ) -> None:
     """Start the internal noVNC desktop and display its local URL."""
@@ -471,16 +475,12 @@ def gui(
     except (GuiError, WorkspaceError, DockerError, LifecycleError) as error:
         _abort(error, 7 if isinstance(error, WorkspaceError) else 3)
     typer.echo(f"GUI URL: {access.url}")
-    if access.password:
-        typer.echo(f"GUI password: {access.password}")
     if access.warning:
         typer.echo(f"WARNING: {access.warning}")
 
 
 @service_app.command("list")
-def service_list(
-    context: typer.Context, name: Annotated[str, typer.Argument(help="Assessment name.")]
-) -> None:
+def service_list(context: typer.Context, name: AssessmentName) -> None:
     """List built-in services and whether this assessment enables them."""
     state = _state(context)
     try:
@@ -509,9 +509,7 @@ def _service_action(context: typer.Context, name: str, service_id: str, action: 
 @service_app.command("up")
 def service_up(
     context: typer.Context,
-    name: Annotated[
-        str, typer.Argument(help="Assessment name.", autocompletion=assessment_completion)
-    ],
+    name: AssessmentName,
     service_id: Annotated[
         str, typer.Argument(help="Service identifier.", autocompletion=service_completion)
     ],
@@ -523,7 +521,7 @@ def service_up(
 @service_app.command("down")
 def service_down(
     context: typer.Context,
-    name: Annotated[str, typer.Argument(help="Assessment name.")],
+    name: AssessmentName,
     service_id: Annotated[str, typer.Argument(help="Service identifier.")],
 ) -> None:
     """Stop a service without deleting its persistent data."""
@@ -533,7 +531,7 @@ def service_down(
 @service_app.command("restart")
 def service_restart(
     context: typer.Context,
-    name: Annotated[str, typer.Argument(help="Assessment name.")],
+    name: AssessmentName,
     service_id: Annotated[str, typer.Argument(help="Service identifier.")],
 ) -> None:
     """Restart a service."""
@@ -543,7 +541,7 @@ def service_restart(
 @service_app.command("status")
 def service_status(
     context: typer.Context,
-    name: Annotated[str, typer.Argument(help="Assessment name.")],
+    name: AssessmentName,
     service_id: Annotated[str | None, typer.Argument(help="Optional service identifier.")] = None,
 ) -> None:
     """Show one service's status, or each enabled service when omitted."""
@@ -563,7 +561,7 @@ def service_status(
 @service_app.command("logs")
 def service_logs(
     context: typer.Context,
-    name: Annotated[str, typer.Argument(help="Assessment name.")],
+    name: AssessmentName,
     service_id: Annotated[str, typer.Argument(help="Service identifier.")],
     follow: Annotated[bool, typer.Option("--follow", "-f", help="Follow service logs.")] = False,
 ) -> None:
@@ -634,7 +632,7 @@ def doctor(context: typer.Context) -> None:
 @app.command()
 def destroy(
     context: typer.Context,
-    name: Annotated[str, typer.Argument(help="Assessment name.")],
+    name: AssessmentName,
     yes: Annotated[bool, typer.Option("--yes", help="Skip the deletion confirmation.")] = False,
 ) -> None:
     """Delete all managed resources and the persistent workspace."""
@@ -663,7 +661,7 @@ def destroy(
 @workspace_app.command("fix-perms")
 def workspace_fix_perms(
     context: typer.Context,
-    name: Annotated[str, typer.Argument(help="Assessment name.")],
+    name: AssessmentName,
 ) -> None:
     """Best-effort normalization of workspace ownership to the host UID/GID."""
     state = _state(context)

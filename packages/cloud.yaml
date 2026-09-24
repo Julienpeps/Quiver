@@ -1,0 +1,33 @@
+profile: cloud
+inherits: base
+# Cross-architecture CLIs and assessment tools for AWS, Azure, GCP, and
+# cloud-native/Kubernetes environments. Google Cloud CLI is installed from its
+# official architecture-specific archive in images/profiles/cloud/Dockerfile.
+packages:
+  - ansible
+  - aws-cli-v2
+  - azure-cli
+  - helm
+  - jq
+  - kube-linter
+  - kubectl
+  - opentofu
+  - terraform
+  - trivy
+  - yq
+arch:
+  amd64:
+    packages:
+      # BlackArch-only specialist tooling; unavailable on Arch Linux ARM.
+      - aws-iam-privesc
+      - aws-inventory
+      - azurehound
+      - checkov
+      - cloud_enum
+      - kube-hunter
+      - prowler
+      - roadrecon
+    optional: []
+  arm64:
+    packages: []
+    optional: []

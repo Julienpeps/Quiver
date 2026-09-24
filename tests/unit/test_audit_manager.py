@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -35,7 +36,9 @@ def test_shell_uses_container_recorder_wrapper(tmp_path: Path) -> None:
 
     assert exit_code == 0
     command = commands[0]
-    assert command[1:5] == ["exec", "--interactive", "--tty", "--env"]
+    assert command[1:7] == ["exec", "--interactive", "--tty", "--user", f"{os.getuid()}:{os.getgid()}", "--env"]
+    assert "HOME=/workspace/.quiver/home" in command
+    assert "SHELL=/usr/bin/fish" in command
     assert "QUIVER_RECORDER=asciinema" in command
     assert command[-2:] == ["quiver-demo", "/usr/local/bin/quiver-record-shell"]
 

@@ -1,0 +1,72 @@
+# TEMPORARY REVIEW DRAFT — not loaded by Quiver builds.
+# Source: ~/Downloads/osint_3.1.18_amd64.csv
+# Validated 2026-09-22 against Arch x86_64 core/extra, Arch Linux ARM aarch64
+# core/extra, and BlackArch x86_64 package database snapshots.
+# `packages` are available on both architectures. `arch.amd64.packages`
+# are x86_64-only (frequently BlackArch) and must remain architecture-gated.
+# Matching is exact/normalized, plus documented command-to-package aliases.
+# CSV rows: 81; package matches: 52; unresolved labels: 28.
+# See docs/research/tool-package-validation.md before promoting this draft.
+profile: external
+inherits: base
+packages:
+  - asciinema
+  - bbot
+  - dirsearch
+  - gau
+  - gobuster
+  - findomain
+  - firefox
+  - fzf
+  - glow
+  - gron
+  - imagemagick
+  - keepassxc
+  - perl-image-exiftool
+  - rlwrap
+  - rsync
+  - tig
+  - whatweb
+  - whois
+  - yarn
+  - yt-dlp
+arch:
+  amd64:
+    packages:
+      - assetfinder
+      - creds
+      - dnsenum
+      - finalrecon
+      - gf
+      - ghunt
+      - gomapenum
+      - goshs
+      - h8mail
+      - holehe
+      - linkedin2username
+      - maigret
+      - maltego
+      - metagoofil
+      - nfsshell
+      - ngrok
+      - phoneinfoga
+      - photon
+      - pwnedornot
+      - pymeta
+      - recon-ng
+      - shellerator
+      - sherlock
+      - simplyemail
+      - spiderfoot
+      - subfinder
+      - sublist3r
+      - theharvester
+      - trevorspray
+      - uberfile
+      - waybackurls
+      - wesng
+      - whatportis
+    optional: []
+  arm64:
+    packages: []
+    optional: []

@@ -61,6 +61,14 @@ def apply_settings(config: AssessmentConfig, assignments: Iterable[str]) -> Asse
         raise ConfigEditError(f"invalid configuration edit: {error}") from error
 
 
+def parse_custom_packages(value: str) -> list[str]:
+    """Parse a comma-separated custom Arch package list."""
+    packages = [package.strip() for package in value.split(",")]
+    if not packages or any(not package for package in packages):
+        raise ConfigEditError("--packages must be a comma-separated list of package names")
+    return packages
+
+
 def parse_port_mapping(value: str) -> PortMapping:
     """Parse ``[HOST_IP:]HOST_PORT:CONTAINER_PORT[/PROTO]`` for CLI options."""
     address, separator, protocol = value.partition("/")
@@ -180,6 +188,7 @@ def apply_start_options(
     network_name: str | None = None,
     publish: Iterable[str] = (),
     services: Iterable[str] = (),
+    packages: str | None = None,
     gui: bool | None = None,
 ) -> AssessmentConfig:
     """Return a validated config with creation/reconfiguration options applied."""
@@ -216,6 +225,10 @@ def apply_start_options(
         data["services"]["enabled"] = sorted(set(data["services"]["enabled"] + service_names))
         data["services"]["autostart"] = sorted(
             set(data["services"]["autostart"] + service_names)
+        )
+    if packages is not None:
+        data["custom_packages"] = sorted(
+            set(data["custom_packages"] + parse_custom_packages(packages))
         )
     if gui is not None:
         data["gui"]["enabled"] = gui

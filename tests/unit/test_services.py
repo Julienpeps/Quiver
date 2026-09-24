@@ -64,9 +64,9 @@ def test_compose_adapter_uses_context_aware_docker_compose(tmp_path: Path) -> No
     adapter = ComposeServiceAdapter(DockerBackend(context="test", runner=runner), config(tmp_path))
 
     assert adapter.up(ServiceRegistry().get("bloodhound-ce")) == "started"
-    assert commands[0][:4] == ["docker", "--context", "test", "compose"]
-    assert "--project-name" in commands[0]
-    assert "up" in commands[0]
+    up = next(command for command in commands if "up" in command)
+    assert up[:4] == ["docker", "--context", "test", "compose"]
+    assert "--project-name" in up
     assert "ps" in commands[-1]
 
 
@@ -110,7 +110,16 @@ def test_internal_adapter_uses_supervisorctl() -> None:
     adapter = SupervisorServiceAdapter(DockerBackend(runner=runner), "quiver-demo")
 
     assert adapter.status("gui") == "gui RUNNING"
-    assert commands[0] == ["docker", "exec", "quiver-demo", "supervisorctl", "status", "gui"]
+    assert commands[0] == [
+        "docker",
+        "exec",
+        "quiver-demo",
+        "supervisorctl",
+        "-c",
+        "/etc/supervisor/supervisord.conf",
+        "status",
+        "gui",
+    ]
 
 
 def test_manager_lists_assessment_service_enablement(tmp_path: Path) -> None:

@@ -2,13 +2,14 @@
 # Bootstrap an Arch Linux ARM root filesystem without host-side build inputs.
 FROM alpine:3.21 AS archlinuxarm-rootfs
 
-RUN apk add --no-cache curl tar \
+RUN --mount=type=cache,target=/downloads \
+    apk add --no-cache curl tar \
     && mkdir -p /rootfs \
-    && curl --fail --location --retry 3 \
+    && curl --continue-at - --fail --location --retry 8 --retry-all-errors \
         http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz \
-        --output /tmp/rootfs.tar.gz \
-    && tar -xzf /tmp/rootfs.tar.gz -C /rootfs \
-    && rm -f /tmp/rootfs.tar.gz
+        --output /downloads/archlinuxarm-aarch64.tar.gz \
+    && tar -xzf /downloads/archlinuxarm-aarch64.tar.gz -C /rootfs \
+    && rm -rf /rootfs/usr/lib/firmware /rootfs/usr/lib/modules
 
 FROM scratch AS archlinuxarm-root
 COPY --from=archlinuxarm-rootfs /rootfs /
@@ -17,26 +18,31 @@ FROM archlinuxarm-root
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-RUN pacman-key --init \
+RUN sed -i '/^\[options\]/a DisableSandbox' /etc/pacman.conf \
+    && pacman-key --init \
     && pacman-key --populate archlinuxarm \
-    && pacman -Syu --noconfirm --needed \
-        asciinema ca-certificates curl git iproute2 iptables-nft nftables \
-        novnc openvpn python python-pyyaml supervisor tigervnc util-linux \
-        websockify wireguard-go wireguard-tools xorg-xauth xterm \
-        xfce4 xfce4-terminal zsh \
-    && curl --fail --location --silent --show-error https://blackarch.org/strap.sh --output /tmp/strap.sh \
-    && chmod +x /tmp/strap.sh \
-    && /tmp/strap.sh \
-    && rm -f /tmp/strap.sh \
+    && pacman -Sy --noconfirm --needed \
+        asciinema ca-certificates curl eza fish firefox git go iproute2 iptables-nft neovim nftables \
+        openvpn python python-pip python-pyyaml starship sudo supervisor tigervnc tmux util-linux \
+        wireguard-tools xorg-xauth xterm xfce4 xfce4-terminal zoxide zsh \
+    && python -m venv /opt/quiver-websockify \
+    && /opt/quiver-websockify/bin/pip install --no-cache-dir websockify \
+    && ln -s /opt/quiver-websockify/bin/websockify /usr/local/bin/websockify \
+    && git clone --depth 1 https://github.com/novnc/noVNC.git /opt/novnc \
+    && git clone --depth 1 https://github.com/WireGuard/wireguard-go.git /tmp/wireguard-go \
+    && (cd /tmp/wireguard-go && go build -o /usr/local/bin/wireguard-go) \
+    && rm -rf /tmp/wireguard-go \
     && pacman -Scc --noconfirm
 
 COPY images/common/entrypoint/quiver-entrypoint /usr/local/bin/quiver-entrypoint
 COPY images/common/shell/quiver-record-shell /usr/local/bin/quiver-record-shell
 COPY images/common/shell/quiver-audit-hook.zsh /usr/local/lib/quiver/quiver-audit-hook.zsh
+COPY images/common/shell/quiver-audit-hook.fish /usr/local/lib/quiver/quiver-audit-hook.fish
 COPY images/common/supervisor/quiver-vpn /usr/local/bin/quiver-vpn
 COPY images/common/supervisor/quiver-killswitch.py /usr/local/lib/quiver/quiver-killswitch.py
 COPY src/quiver/vpn/killswitch.py /usr/local/lib/quiver/killswitch.py
 COPY images/common/gui/quiver-gui /usr/local/bin/quiver-gui
+COPY images/common/gui/assets/quiver-background.png /usr/share/backgrounds/quiver/background.png
 COPY images/common/supervisor/supervisord.conf /etc/supervisor/supervisord.conf
 COPY images/common/entrypoint/generate-supervisor.py /usr/local/lib/quiver/generate-supervisor.py
 COPY images/common/entrypoint/image.json /etc/quiver/image.json
@@ -50,8 +56,11 @@ RUN install -d -m 0755 /workspace /run/quiver /etc/supervisor/conf.d /opt \
         /usr/local/bin/quiver-vpn /usr/local/bin/quiver-gui \
         /usr/local/lib/quiver/quiver-killswitch.py \
     && chmod 0644 /usr/local/lib/quiver/quiver-audit-hook.zsh \
+        /usr/local/lib/quiver/quiver-audit-hook.fish \
         /usr/local/lib/quiver/generate-supervisor.py /usr/local/lib/quiver/killswitch.py \
         /etc/quiver/image.json /etc/quiver/packages/base.yaml
+
+ENV SHELL=/usr/bin/fish
 
 WORKDIR /workspace
 ENTRYPOINT ["/usr/local/bin/quiver-entrypoint"]

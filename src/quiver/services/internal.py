@@ -5,6 +5,8 @@ from __future__ import annotations
 from quiver.docker.backend import DockerBackend
 from quiver.services.registry import ServiceError
 
+SUPERVISOR_CONFIG = "/etc/supervisor/supervisord.conf"
+
 
 class InternalServiceError(ServiceError):
     """Raised when Supervisor cannot control an internal service."""
@@ -30,14 +32,14 @@ class SupervisorServiceAdapter:
         return self._control("status", service_id)
 
     def logs(self, service_id: str, follow: bool = False) -> str:
-        args = ["exec", self.container_name, "supervisorctl", "tail"]
+        args = ["exec", self.container_name, "supervisorctl", "-c", SUPERVISOR_CONFIG, "tail"]
         if follow:
             args.append("-f")
         args.append(service_id)
         return self._run(*args, stream=follow)
 
     def _control(self, action: str, service_id: str | None = None) -> str:
-        args = ["exec", self.container_name, "supervisorctl", action]
+        args = ["exec", self.container_name, "supervisorctl", "-c", SUPERVISOR_CONFIG, action]
         if service_id:
             args.append(service_id)
         return self._run(*args)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
@@ -12,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 SCHEMA_VERSION = 1
 DEFAULT_WORKSPACE_CONTAINER_PATH = "/workspace"
+PACKAGE_NAME_PATTERN = re.compile(r"^[A-Za-z0-9@._+:-]+$")
 
 
 class ConfigError(ValueError):
@@ -157,7 +159,9 @@ class GuiConfig(QuiverModel):
     container_port: int = Field(default=6080, ge=1, le=65535)
     host_ip: str = "127.0.0.1"
     host_port: int | None = Field(default=None, ge=1, le=65535)
-    authentication: bool = True
+    # Accepted only to load legacy v1 configs. GUI access is loopback-only and
+    # intentionally unauthenticated; exclude this retired setting on rewrite.
+    authentication: bool | None = Field(default=None, exclude=True)
     clipboard: bool = True
     dynamic_resize: bool = True
     initial_geometry: str = "1600x1000"
@@ -187,6 +191,16 @@ class AssessmentConfig(QuiverModel):
     gui: GuiConfig = Field(default_factory=GuiConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     services: ServicesConfig = Field(default_factory=ServicesConfig)
+    custom_packages: list[str] = Field(default_factory=list)
+
+    @field_validator("custom_packages")
+    @classmethod
+    def validates_custom_packages(cls, values: list[str]) -> list[str]:
+        if len(values) != len(set(values)):
+            raise ValueError("custom_packages must not contain duplicates")
+        if any(not PACKAGE_NAME_PATTERN.fullmatch(value) for value in values):
+            raise ValueError("custom_packages contains an invalid package name")
+        return values
 
     @field_validator("schema_version")
     @classmethod

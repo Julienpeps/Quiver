@@ -49,7 +49,7 @@ jobs:
           docker build --file "${{ matrix.dockerfile }}" \
             --tag "$IMAGE-base:${VERSION}-${architecture}" .
           docker push "$IMAGE-base:${VERSION}-${architecture}"
-          for profile in web internal full; do
+          for profile in web internal cloud full; do
             required="$(uv run python -c "from quiver.core.images import load_package_report; print(' '.join(load_package_report('$profile', '${{ matrix.platform }}').required))")"
             optional="$(uv run python -c "from quiver.core.images import load_package_report; print(' '.join(load_package_report('$profile', '${{ matrix.platform }}').optional))")"
             docker build --file "images/profiles/$profile/Dockerfile" \
@@ -71,7 +71,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           echo "$GITHUB_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-          for profile in base web internal full; do
+          for profile in base web internal cloud full; do
             docker buildx imagetools create \
               --tag "$IMAGE-$profile:$VERSION" \
               --tag "$IMAGE-$profile:$DATE_TAG" \

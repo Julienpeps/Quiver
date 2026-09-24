@@ -4,14 +4,16 @@ FROM archlinux:base-devel
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-RUN pacman-key --init \
+RUN sed -i '/^\[options\]/a DisableSandbox' /etc/pacman.conf \
+    && pacman-key --init \
     && pacman-key --populate archlinux \
     && pacman -Syu --noconfirm --needed \
-        asciinema ca-certificates curl git iproute2 iptables-nft nftables \
-        novnc openvpn python python-pyyaml supervisor tigervnc util-linux \
-        websockify wireguard-go wireguard-tools xorg-xauth xterm \
-        xfce4 xfce4-terminal zsh \
-    && curl --fail --location --silent --show-error https://blackarch.org/strap.sh --output /tmp/strap.sh \
+        asciinema ca-certificates curl eza fish firefox git iproute2 iptables-nft neovim nftables \
+        novnc openvpn python python-pyyaml starship sudo supervisor tigervnc tmux util-linux \
+        websockify wireguard-go wireguard-tools xorg-xauth xterm xfce4 xfce4-terminal \
+        zoxide zsh \
+    && curl --fail --location --silent --show-error --retry 5 --retry-all-errors \
+        https://blackarch.org/strap.sh --output /tmp/strap.sh \
     && chmod +x /tmp/strap.sh \
     && /tmp/strap.sh \
     && rm -f /tmp/strap.sh \
@@ -21,10 +23,12 @@ RUN pacman-key --init \
 COPY images/common/entrypoint/quiver-entrypoint /usr/local/bin/quiver-entrypoint
 COPY images/common/shell/quiver-record-shell /usr/local/bin/quiver-record-shell
 COPY images/common/shell/quiver-audit-hook.zsh /usr/local/lib/quiver/quiver-audit-hook.zsh
+COPY images/common/shell/quiver-audit-hook.fish /usr/local/lib/quiver/quiver-audit-hook.fish
 COPY images/common/supervisor/quiver-vpn /usr/local/bin/quiver-vpn
 COPY images/common/supervisor/quiver-killswitch.py /usr/local/lib/quiver/quiver-killswitch.py
 COPY src/quiver/vpn/killswitch.py /usr/local/lib/quiver/killswitch.py
 COPY images/common/gui/quiver-gui /usr/local/bin/quiver-gui
+COPY images/common/gui/assets/quiver-background.png /usr/share/backgrounds/quiver/background.png
 COPY images/common/supervisor/supervisord.conf /etc/supervisor/supervisord.conf
 COPY images/common/entrypoint/generate-supervisor.py /usr/local/lib/quiver/generate-supervisor.py
 COPY images/common/entrypoint/image.json /etc/quiver/image.json
@@ -38,8 +42,11 @@ RUN install -d -m 0755 /workspace /run/quiver /etc/supervisor/conf.d /opt \
         /usr/local/bin/quiver-vpn /usr/local/bin/quiver-gui \
         /usr/local/lib/quiver/quiver-killswitch.py \
     && chmod 0644 /usr/local/lib/quiver/quiver-audit-hook.zsh \
+        /usr/local/lib/quiver/quiver-audit-hook.fish \
         /usr/local/lib/quiver/generate-supervisor.py /usr/local/lib/quiver/killswitch.py \
         /etc/quiver/image.json /etc/quiver/packages/base.yaml
+
+ENV SHELL=/usr/bin/fish
 
 WORKDIR /workspace
 ENTRYPOINT ["/usr/local/bin/quiver-entrypoint"]

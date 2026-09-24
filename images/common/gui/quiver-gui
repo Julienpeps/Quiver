@@ -2,9 +2,6 @@
 set -eu
 
 runtime_config=/run/quiver/config.yaml
-password_file=/workspace/.services/gui-password
-vnc_password_file=/run/quiver/gui.vnc-password
-
 mapfile -t values < <(python - "$runtime_config" <<'PYTHON'
 import sys
 import yaml
@@ -12,40 +9,68 @@ import yaml
 config = yaml.safe_load(open(sys.argv[1], encoding="utf-8")) or {}
 gui = config.get("gui") or {}
 print(gui.get("container_port", 6080))
-print("true" if gui.get("authentication", True) else "false")
 print(gui.get("initial_geometry", "1600x1000"))
 PYTHON
 )
 port="${values[0]}"
-authentication="${values[1]}"
-geometry="${values[2]}"
+geometry="${values[1]}"
 
-vnc_args=(-geometry "$geometry" -localhost yes -AcceptSetDesktopSize -SendClipboard=on -AcceptClipboard=on)
-if [[ "$authentication" == "true" ]]; then
-    if [[ ! -r "$password_file" ]]; then
-        echo "GUI authentication is enabled but no VNC password file exists" >&2
-        exit 64
-    fi
-    umask 077
-    printf '%s' "$(<"$password_file")" | vncpasswd -f > "$vnc_password_file"
-    vnc_args+=(-rfbauth "$vnc_password_file")
-else
-    vnc_args+=(-SecurityTypes None)
+# The noVNC endpoint is bound to loopback by Docker. Do not add a VNC
+# password: host-local browser access is the v1 trust boundary.
+vnc_args=(-geometry "$geometry" -localhost yes -AcceptSetDesktopSize -SendCutText=on -AcceptCutText=on -SecurityTypes None)
+
+# Arch Linux ARM rootfs images have an empty machine ID. D-Bus refuses to
+# create a session without one, which leaves XFCE running without its panel or
+# window manager. The ID belongs to this disposable container, not the host.
+if ! grep -Eq '^[[:xdigit:]]{32}$' /etc/machine-id 2>/dev/null; then
+    rm -f /etc/machine-id
+    dbus-uuidgen --ensure=/etc/machine-id
 fi
 
 Xvnc :1 "${vnc_args[@]}" &
 vnc_pid=$!
-DISPLAY=:1 xfce4-session &
+
+start_xfce_session() {
+    export DISPLAY=:1
+    # Match interactive Quiver shells so the existing read-only host dotfiles
+    # mount is visible at $HOME/.config.
+    export HOME=/workspace/.quiver/home
+    # Keep XFCE's generated state disposable and separate from user dotfiles.
+    export XDG_CONFIG_HOME=/run/quiver/xfce-config
+    export XDG_CACHE_HOME=/run/quiver/xfce-cache
+    dbus-run-session -- bash -ceu '
+        xfce4-session &
+        session_pid=$!
+        # Let XFCE establish its D-Bus state before setting the desktop
+        # backdrop and creating the recorded terminal.
+        sleep 1
+        # Xvnc exposes its single XRandR output as VNC-0. XFCE 4.20 stores
+        # per-workspace backdrops under that output name.
+        xfconf-query --channel xfce4-desktop \
+            --property /backdrop/screen0/monitorVNC-0/workspace0/last-image \
+            --create --type string --set /usr/share/backgrounds/quiver/background.png
+        xfconf-query --channel xfce4-desktop \
+            --property /backdrop/screen0/monitorVNC-0/workspace0/image-style \
+            --create --type int --set 5
+        xfce4-terminal --command /usr/local/bin/quiver-record-shell &
+        terminal_pid=$!
+        cleanup() {
+            kill "$terminal_pid" "$session_pid" 2>/dev/null || true
+            wait "$terminal_pid" "$session_pid" 2>/dev/null || true
+        }
+        trap cleanup EXIT INT TERM
+        wait "$session_pid"
+    '
+}
+start_xfce_session &
 xfce_pid=$!
-# The initial GUI terminal is always routed through Quiver's audit wrapper.
-DISPLAY=:1 xfce4-terminal --command /usr/local/bin/quiver-record-shell &
-terminal_pid=$!
+
 websockify --web /opt/novnc "$port" localhost:5901 &
 websockify_pid=$!
 
 cleanup() {
-    kill "$websockify_pid" "$terminal_pid" "$xfce_pid" "$vnc_pid" 2>/dev/null || true
-    wait "$websockify_pid" "$terminal_pid" "$xfce_pid" "$vnc_pid" 2>/dev/null || true
+    kill "$websockify_pid" "$xfce_pid" "$vnc_pid" 2>/dev/null || true
+    wait "$websockify_pid" "$xfce_pid" "$vnc_pid" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
-wait "$websockify_pid"
+wait -n "$vnc_pid" "$xfce_pid" "$websockify_pid"

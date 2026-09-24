@@ -11,7 +11,7 @@ import yaml
 from quiver.docker.backend import DockerBackend, DockerError
 
 Platform = Literal["linux/amd64", "linux/arm64"]
-PROFILE_NAMES = ("base", "web", "internal", "full")
+PROFILE_NAMES = ("base", "web", "internal", "cloud", "full")
 
 
 class ImageError(RuntimeError):

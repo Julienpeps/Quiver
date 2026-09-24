@@ -27,7 +27,7 @@ uv run ruff check .
 ## Core workflow
 
 ```bash
-# Create + start an assessment and enter a recorded root shell
+# Create + start an assessment and enter a recorded host-UID/GID shell
 quiver start acme-2026 --image ghcr.io/example/quiver-internal:stable
 
 # Start without entering a shell
@@ -36,11 +36,16 @@ quiver start acme-2026 --image ghcr.io/example/quiver-internal:stable --detach
 # With a VPN profile (copied into the workspace on first creation)
 quiver start acme-2026 --image ... --vpn client.ovpn --vpn-credentials auth.txt --vpn-type auto
 
+# Add comma-separated Arch packages to this assessment's disposable container.
+quiver start acme-2026 --packages nmap,jq --detach
+
 # Inspect
 quiver list
 quiver status acme-2026
 
 # Shell / exec (recorded)
+# Shells run as your host UID/GID and use Fish by default.
+# Use sudo without a password when a command requires container root.
 quiver shell acme-2026
 quiver shell acme-2026 --asciinema
 quiver exec acme-2026 -- nmap -sV 10.10.10.5
@@ -50,7 +55,7 @@ quiver logs acme-2026
 quiver logs acme-2026 --session 20260920T142701Z-7f3a2c
 quiver replay acme-2026 20260920T142701Z-7f3a2c
 
-# GUI (loopback noVNC, per-assessment password)
+# GUI (loopback-only noVNC; opens the host default browser)
 quiver gui acme-2026
 
 # Services (internal Supervisor services and Compose stacks)
@@ -63,7 +68,12 @@ quiver service logs acme-2026 bloodhound-ce -f
 quiver edit acme-2026                       # opens $VISUAL/$EDITOR, validates on save
 quiver edit acme-2026 --set docker.privileged=true
 quiver edit acme-2026 --publish 8443:8443
+quiver edit acme-2026 --packages ripgrep,fd --restart
 quiver edit acme-2026 --vpn new-client.ovpn --restart
+
+# Host dotfiles: place Fish, tmux, Starship, Neovim, etc. configuration here.
+# This directory is mounted read-only as ~/.config in interactive shells.
+mkdir -p ~/.quiver/dotfiles
 
 # Lifecycle
 quiver stop acme-2026                      # removes the container, keeps the workspace
@@ -74,6 +84,7 @@ quiver workspace fix-perms acme-2026       # best-effort host UID/GID normalizat
 quiver image list
 quiver image pull internal
 quiver image build internal --platform linux/arm64
+quiver image build cloud --platform linux/arm64  # AWS, Azure, GCP, Kubernetes tooling
 ```
 
 Global options: `--context NAME` (per-invocation Docker context), `--root PATH` (override `~/.quiver`), `--verbose` (log Docker commands with credential redaction), `--no-color`.

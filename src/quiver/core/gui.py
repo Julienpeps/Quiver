@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import secrets
-import string
 import time
 from dataclasses import dataclass
-from pathlib import Path
 
 from quiver.core.browser import BrowserLauncher
 from quiver.core.lifecycle import LifecycleManager, primary_container_name
@@ -14,7 +11,7 @@ from quiver.docker.backend import DockerError
 from quiver.docker.inspect import published_port
 from quiver.models.config import AssessmentConfig
 
-GUI_PASSWORD_FILENAME = "gui-password"
+SUPERVISOR_CONFIG = "/etc/supervisor/supervisord.conf"
 
 
 class GuiError(RuntimeError):
@@ -24,31 +21,7 @@ class GuiError(RuntimeError):
 @dataclass(frozen=True)
 class GuiAccess:
     url: str
-    password: str | None
     warning: str | None
-
-
-def gui_password_path(config: AssessmentConfig) -> Path:
-    """Return the implementation-owned GUI credential location."""
-    return Path(config.workspace.path) / ".services" / GUI_PASSWORD_FILENAME
-
-
-def ensure_gui_credential(config: AssessmentConfig) -> str | None:
-    """Create a restrictive per-assessment VNC password when auth is enabled."""
-    if not config.gui.authentication:
-        return None
-    path = gui_password_path(config)
-    try:
-        if path.is_file():
-            return path.read_text().strip()
-        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        alphabet = string.ascii_letters + string.digits
-        password = "".join(secrets.choice(alphabet) for _ in range(8))
-        path.write_text(f"{password}\n")
-        path.chmod(0o600)
-        return password
-    except OSError as error:
-        raise GuiError(f"could not create GUI credential {path}: {error}") from error
 
 
 def gui_url(host_ip: str, host_port: int) -> str:
@@ -75,7 +48,6 @@ class GuiManager:
             raise GuiError("GUI is disabled; enable it with quiver edit or start --gui")
         if config.docker.network.mode == "none":
             raise GuiError("GUI is unavailable with docker.network.mode=none")
-        password = ensure_gui_credential(config)
         status = self.lifecycle.status(config)
         if not status.running:
             self.lifecycle.start(config)
@@ -85,17 +57,21 @@ class GuiManager:
         warning = None
         if host_ip not in {"127.0.0.1", "::1", "localhost"}:
             warning = f"GUI is exposed on non-loopback address {host_ip}"
-        access = GuiAccess(gui_url(host_ip, host_port), password, warning)
+        access = GuiAccess(gui_url(host_ip, host_port), warning)
         if launch_browser:
             (browser or BrowserLauncher()).open(access.url)
         return access
 
     def _start_and_wait(self, name: str) -> None:
-        result = self.docker.run("exec", name, "supervisorctl", "start", "gui", check=False)
+        result = self.docker.run(
+            "exec", name, "supervisorctl", "-c", SUPERVISOR_CONFIG, "start", "gui", check=False
+        )
         if result.returncode and "already started" not in result.stdout.lower():
             raise GuiError(result.stderr.strip() or result.stdout.strip() or "could not start GUI service")
         for _ in range(20):
-            status = self.docker.run("exec", name, "supervisorctl", "status", "gui", check=False)
+            status = self.docker.run(
+                "exec", name, "supervisorctl", "-c", SUPERVISOR_CONFIG, "status", "gui", check=False
+            )
             if status.returncode == 0 and "RUNNING" in status.stdout:
                 return
             time.sleep(0.25)

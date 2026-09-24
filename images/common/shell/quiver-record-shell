@@ -9,7 +9,6 @@ session_dir="$sessions/$session_id"
 export QUIVER_SESSION_ID="$session_id"
 
 install -d -m 0700 "$session_dir"
-printf 'source /usr/local/lib/quiver/quiver-audit-hook.zsh\n' > "$session_dir/.zshenv"
 _quiver_metadata_merge() {
     # Merge fields into host-authored metadata without dropping provenance.
     if command -v python3 >/dev/null 2>&1; then
@@ -49,7 +48,23 @@ _quiver_metadata_merge start
 touch "$session_dir/commands.jsonl"
 chmod 0600 "$session_dir/commands.jsonl"
 
-shell_command="env ZDOTDIR=$session_dir ${SHELL:-/bin/zsh} -i"
+case "${SHELL:-/usr/bin/fish}" in
+    */fish)
+        install -d -m 0700 "$session_dir/fish"
+        cat > "$session_dir/fish/config.fish" <<'FISH'
+if test -f "$HOME/.config/fish/config.fish"
+    source "$HOME/.config/fish/config.fish"
+end
+source /usr/local/lib/quiver/quiver-audit-hook.fish
+FISH
+        shell_command="env XDG_CONFIG_HOME=$session_dir ${SHELL:-/usr/bin/fish} -i"
+        ;;
+    *)
+        printf 'source /usr/local/lib/quiver/quiver-audit-hook.zsh\n' > "$session_dir/.zshenv"
+        shell_command="env ZDOTDIR=$session_dir ${SHELL:-/bin/zsh} -i"
+        ;;
+esac
+
 case "$recorder" in
     script)
         script --quiet --log-out "$session_dir/output.ansi" \

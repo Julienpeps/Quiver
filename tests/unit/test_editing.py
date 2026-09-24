@@ -7,6 +7,7 @@ from quiver.core.editing import (
     apply_settings,
     apply_start_options,
     has_start_options,
+    parse_custom_packages,
     parse_port_mapping,
     replace_config,
 )
@@ -35,6 +36,14 @@ def test_apply_settings_rejects_unknown_or_non_mapping_paths(tmp_path: Path) -> 
         apply_settings(config, ["gui.enabled.value=true"])
 
 
+def test_parse_custom_packages_rejects_empty_entries() -> None:
+    assert parse_custom_packages("nmap, jq,firefox") == ["nmap", "jq", "firefox"]
+    with pytest.raises(ConfigEditError, match="comma-separated"):
+        parse_custom_packages("nmap,,jq")
+    with pytest.raises(ConfigEditError, match="invalid package name"):
+        apply_start_options(default_assessment_config("demo", Path("/tmp")), packages="jq;id")
+
+
 @pytest.mark.parametrize(
     ("value", "expected"),
     [
@@ -60,6 +69,7 @@ def test_reconfigure_options_update_persisted_configuration(tmp_path: Path) -> N
         network_name="assessment-net",
         publish=["8081:8081"],
         services=["bloodhound-ce"],
+        packages="nmap,jq,nmap",
         gui=False,
     )
     path = tmp_path / ".quiver.yaml"
@@ -73,6 +83,7 @@ def test_reconfigure_options_update_persisted_configuration(tmp_path: Path) -> N
     assert loaded.docker.network.name == "assessment-net"
     assert loaded.docker.ports[0].host_port == 8081
     assert loaded.services.autostart == ["bloodhound-ce"]
+    assert loaded.custom_packages == ["jq", "nmap"]
     assert loaded.gui.enabled is False
 
 

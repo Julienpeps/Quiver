@@ -12,6 +12,7 @@ def test_amd64_image_installs_and_exposes_runtime_contract() -> None:
     assert "quiver-record-shell" in dockerfile
     assert "quiver-vpn" in dockerfile
     assert "quiver-gui" in dockerfile
+    assert "images/common/gui/assets/quiver-background.png" in dockerfile
     assert 'ENTRYPOINT ["/usr/local/bin/quiver-entrypoint"]' in dockerfile
 
 
@@ -32,11 +33,13 @@ def test_container_scripts_are_safe_and_supervisor_is_configured() -> None:
     assert "supervisord --nodaemon" in entrypoint
     supervisor = (ROOT / "images/common/supervisor/supervisord.conf").read_text()
     assert "[unix_http_server]" in supervisor
+    assert "[rpcinterface:supervisor]" in supervisor
+    assert "supervisor.rpcinterface:make_main_rpcinterface" in supervisor
     assert "/etc/supervisor/conf.d/*.conf" in supervisor
 
 
 def test_base_manifest_keeps_runtime_dependencies_as_data() -> None:
     manifest = (ROOT / "packages/base.yaml").read_text()
 
-    for package in ("novnc", "openvpn", "wireguard-tools", "tigervnc", "websockify", "supervisor"):
+    for package in ("firefox", "novnc", "openvpn", "wireguard-tools", "tigervnc", "websockify", "supervisor"):
         assert f"  - {package}" in manifest

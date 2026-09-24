@@ -3,22 +3,33 @@ inherits: null
 packages:
   - ca-certificates
   - curl
+  - dnsutils
+  - eza
+  - fish
+  - firefox
+  - gcc
   - git
   - iproute2
   - iptables-nft
+  - neovim
   - nftables
   - novnc
+  - openbsd-netcat
   - openvpn
   - python
   - python-pyyaml
+  - starship
+  - sudo
   - supervisor
   - tigervnc
+  - tmux
   - util-linux
   - websockify
   - wireguard-go
   - wireguard-tools
   - xfce4
   - xfce4-terminal
+  - zoxide
   - zsh
 arch:
   amd64:

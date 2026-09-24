@@ -58,6 +58,7 @@ From the repository root:
 # Apple Silicon / ARM Docker daemon
 uv run quiver image build base --platform linux/arm64
 uv run quiver image build internal --platform linux/arm64
+uv run quiver image build cloud --platform linux/arm64
 
 # Intel / AMD Docker daemon
 uv run quiver image build base --platform linux/amd64
@@ -69,6 +70,7 @@ Build the base first. Then select the profile you need:
 ```bash
 uv run quiver image build web
 uv run quiver image build internal
+uv run quiver image build cloud
 uv run quiver image build full
 ```
 
@@ -111,7 +113,7 @@ docker build \
   --tag "quiver-$PROFILE:stable" .
 ```
 
-Use `PROFILE=web` or `PROFILE=full` for those profiles. Confirm the local image exists before starting an assessment:
+Use `PROFILE=web`, `PROFILE=internal`, `PROFILE=cloud`, or `PROFILE=full` for those profiles. Confirm the local image exists before starting an assessment:
 
 ```bash
 docker image inspect quiver-base:stable
@@ -127,10 +129,13 @@ After the local image exists, the command that previously failed will work witho
 # Creates ~/.quiver/workspaces/test/ and starts the local base image.
 uv run quiver start test --detach
 
+# Add comma-separated Arch packages to the disposable assessment container.
+uv run quiver start test --packages nmap,jq --detach
+
 # Start an assessment using a local profile explicitly.
 uv run quiver start internal-demo --image quiver-internal:stable --detach
 
-# Enter a recorded root shell (omit --detach).
+# Enter a recorded Fish shell running as your host UID/GID (omit --detach).
 uv run quiver start internal-demo
 ```
 
@@ -139,6 +144,8 @@ If `test` already exists from a failed initial start, build `quiver-base:stable`
 ```bash
 uv run quiver start test --image quiver-internal:stable --reconfigure --detach
 ```
+
+Custom packages are persisted in the assessment configuration and installed with `pacman -Sy --needed` whenever Quiver creates its disposable primary container. Add packages to an existing assessment with `quiver edit NAME --packages pkg1,pkg2 --restart`; the option appends unique names rather than removing existing ones. Package availability remains architecture- and repository-dependent.
 
 Useful lifecycle commands:
 
@@ -179,6 +186,20 @@ uv run quiver edit demo --set gui.enabled=false
 
 Creation options do not modify an existing assessment unless `--reconfigure` is supplied. Use `quiver edit` for deliberate configuration changes.
 
+### Host ownership and dotfiles
+
+Interactive `quiver shell` and `quiver exec` commands run as the invoking host UID/GID, so files they create in the bind-mounted workspace remain editable on the host. Quiver creates a matching in-container user and grants it passwordless `sudo`, so use `sudo <command>` whenever container root is required. Runtime services stay root-owned while the container runs; `quiver stop` performs a final ownership repair. Use `quiver workspace fix-perms NAME` if a previous image left root-owned workspace files.
+
+Quiver directly binds `~/.quiver/dotfiles` into every interactive shell as read-only `~/.config` (or `<state-root>/dotfiles` when `--root` is supplied). The directory is created on the first assessment start. Put your configuration there:
+
+```bash
+mkdir -p ~/.quiver/dotfiles/{fish,nvim,tmux}
+$EDITOR ~/.quiver/dotfiles/fish/config.fish
+$EDITOR ~/.quiver/dotfiles/starship.toml
+```
+
+The image provides Fish as the default shell plus tmux, Starship, zoxide, eza, and Neovim. The bind mount is intentionally read-only: edit dotfiles on the host; new shells see the changes immediately.
+
 ## 5. VPN, GUI, services, and audit
 
 ### VPN
@@ -201,7 +222,7 @@ uv run quiver gui internal-demo
 uv run quiver gui internal-demo --no-open
 ```
 
-The GUI is noVNC bound to loopback. Quiver reports the URL and any generated per-assessment password; do not expose the port publicly without understanding the security consequences.
+The GUI is unauthenticated noVNC bound to loopback. `quiver gui NAME` reports the URL and opens it with the host default browser unless `--no-open` is supplied. The base image includes Firefox for in-container web assessment. Do not expose the port publicly.
 
 ### Services
 

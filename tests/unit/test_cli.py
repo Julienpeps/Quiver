@@ -1,9 +1,13 @@
+from typing import get_type_hints
+
 from typer.testing import CliRunner
 
 from quiver.cli import (
+    AssessmentName,
     app,
     assessment_completion,
     profile_completion,
+    service_app,
     service_completion,
 )
 
@@ -14,6 +18,18 @@ def test_cli_displays_help_without_a_command() -> None:
     assert result.exit_code == 0
     assert "Disposable assessment-scoped" in result.output
     assert "gui" in result.output
+    start = CliRunner().invoke(app, ["start", "--help"])
+    edit = CliRunner().invoke(app, ["edit", "--help"])
+    assert "--packages" in start.output
+    assert "--packages" in edit.output
+
+
+def test_all_assessment_commands_use_dynamic_name_completion() -> None:
+    for command in [*app.registered_commands, *service_app.registered_commands]:
+        callback = command.callback
+        hints = get_type_hints(callback, include_extras=True) if callback is not None else {}
+        if "name" in hints:
+            assert hints["name"] == AssessmentName
 
 
 def test_dynamic_completion_exposes_builtin_profiles_and_services() -> None:

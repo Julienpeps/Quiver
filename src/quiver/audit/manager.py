@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import secrets
 import socket
 import subprocess
@@ -49,6 +50,11 @@ class AuditManager:
             "exec",
             "--interactive",
             "--tty",
+            *_host_user_args(),
+            "--env",
+            f"HOME={config.workspace.container_path}/.quiver/home",
+            "--env",
+            "SHELL=/usr/bin/fish",
             "--env",
             f"QUIVER_SESSION_ID={session_id}",
             "--env",
@@ -86,6 +92,11 @@ class AuditManager:
         started = datetime.now(UTC)
         result = self.docker.run(
             "exec",
+            *_host_user_args(),
+            "--env",
+            f"HOME={config.workspace.container_path}/.quiver/home",
+            "--env",
+            "SHELL=/usr/bin/fish",
             primary_container_name(config.name),
             *command,
             check=False,
@@ -157,6 +168,14 @@ class AuditManager:
         for path in (record, record.with_suffix(".stdout"), record.with_suffix(".stderr")):
             path.chmod(0o600)
         return record
+
+
+def _host_user_args() -> tuple[str, ...]:
+    """Return Docker exec user flags for the invoking POSIX user when available."""
+    try:
+        return ("--user", f"{os.getuid()}:{os.getgid()}")
+    except AttributeError:
+        return ()
 
 
 def _session_id() -> str:

@@ -189,19 +189,20 @@ class DockerBackend:
         """Run a Docker CLI plugin, accommodating standalone Homebrew binaries."""
         if plugin in self._standalone_plugins:
             return self._run_standalone_plugin(plugin, *args, check=check, stream=stream)
-        if stream and plugin not in self._docker_plugins:
-            # Probe quietly before a long-running command so an unavailable CLI
-            # plugin does not emit an error before the standalone fallback runs.
+        if plugin not in self._docker_plugins and args != ("version",):
+            # The Docker CLI can parse an unavailable plugin differently based
+            # on its arguments (for example, unknown command vs. unknown flag).
+            # Probe a stable command before issuing the requested operation.
             probe = self.run(plugin, "version", check=False)
             if probe.returncode == 0:
                 self._docker_plugins.add(plugin)
-                return self.run(plugin, *args, check=check, stream=True)
-            if self._plugin_unavailable(probe) and shutil.which(f"{self.executable}-{plugin}"):
+            elif self._plugin_unavailable(probe) and shutil.which(f"{self.executable}-{plugin}"):
                 self._standalone_plugins.add(plugin)
-                return self._run_standalone_plugin(plugin, *args, check=check, stream=True)
-            if check:
+                return self._run_standalone_plugin(plugin, *args, check=check, stream=stream)
+            elif check:
                 self._raise_for_result(probe)
-            return probe
+            else:
+                return probe
 
         result = self.run(plugin, *args, check=False, stream=stream)
         standalone = f"{self.executable}-{plugin}"

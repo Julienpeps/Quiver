@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -56,8 +57,67 @@ def test_create_arguments_include_labels_mounts_ports_and_vpn_permissions(
     assert "NET_ADMIN" in arguments
     assert "/dev/net/tun" in arguments
     assert "linux/arm64" in arguments
+    assert f"QUIVER_HOST_UID={os.getuid()}" in arguments
+    assert f"QUIVER_HOST_GID={os.getgid()}" in arguments
     assert "127.0.0.1::6080/tcp" in arguments
     assert assessment_network_name("demo") in arguments
+
+
+def test_create_arguments_mounts_fixed_global_dotfiles_read_only(tmp_path: Path) -> None:
+    dotfiles = tmp_path / "state" / "dotfiles"
+    dotfiles.mkdir(parents=True)
+    workspace = tmp_path / "workspace"
+    config = AssessmentConfig.model_validate(
+        {
+            "schema_version": 1,
+            "name": "demo",
+            "image": {"profile": "base"},
+            "workspace": {"path": str(workspace)},
+        }
+    )
+
+    arguments = LifecycleManager(DockerBackend(), tmp_path / "state")._create_args(
+        config, "quiver-base:stable", workspace / "runtime.yaml", dotfiles
+    )
+
+    assert f"type=bind,src={dotfiles},dst=/workspace/.quiver/home/.config,readonly" in arguments
+
+
+def test_lifecycle_installs_configured_custom_packages(tmp_path: Path) -> None:
+    commands: list[list[str]] = []
+
+    def runner(args: list[str], **kwargs: object) -> object:
+        commands.append(args)
+        from subprocess import CompletedProcess
+
+        return CompletedProcess(args, 0, "", "")
+
+    config = AssessmentConfig.model_validate(
+        {
+            "schema_version": 1,
+            "name": "demo",
+            "image": {"profile": "base"},
+            "workspace": {"path": str(tmp_path)},
+            "custom_packages": ["jq", "nmap"],
+        }
+    )
+
+    LifecycleManager(DockerBackend(runner=runner))._install_custom_packages(config)
+
+    assert commands == [
+        [
+            "docker",
+            "exec",
+            "quiver-demo",
+            "pacman",
+            "-Sy",
+            "--noconfirm",
+            "--needed",
+            "--",
+            "jq",
+            "nmap",
+        ]
+    ]
 
 
 def test_lifecycle_rejects_wireguard_profile_without_default_route(tmp_path: Path) -> None:

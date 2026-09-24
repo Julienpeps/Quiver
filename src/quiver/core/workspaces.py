@@ -57,6 +57,7 @@ def initialize_workspace(config: AssessmentConfig) -> Path:
             ".logs/services",
             ".vpn",
             ".services",
+            ".quiver/home",
         ):
             (workspace / directory).mkdir(mode=0o700, parents=True, exist_ok=True)
         write_config(existing_config, config)

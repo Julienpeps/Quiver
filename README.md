@@ -1,3 +1,16 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/logo-light.png">
+    <img src="docs/assets/logo-light.png" alt="Quiver logo" width="300">
+  </picture>
+</p>
+
+<p align="center">
+  <a href="https://github.com/Julienpeps/Quiver/actions/workflows/test-cli.yml"><img src="https://github.com/Julienpeps/Quiver/actions/workflows/test-cli.yml/badge.svg" alt="CI status"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
+</p>
+
 # Quiver
 
 Quiver is a Python CLI for disposable, assessment-scoped Docker penetration-testing environments with persistent host workspaces. Each assessment gets one ephemeral primary container (BlackArch-based), one persistent workspace under `~/.quiver/workspaces/<assessment>/`, a dedicated Docker network, optional full-tunnel OpenVPN/WireGuard with a fail-closed kill switch, and a loopback-only browser GUI (XFCE + TigerVNC + noVNC).
@@ -118,3 +131,8 @@ docs/              implementation specification
 
 - [User guide](docs/user-guide.md): verified local builds, image selection, assessment operations, VPN, GUI, services, audit, troubleshooting, and publishing.
 - [Implementation specification](docs/implementation-spec.md): full v1 design and acceptance criteria.
+- [Research notes](docs/research/): AUR/ARM64, desktop/VNC, and package-validation assessments that inform image decisions.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

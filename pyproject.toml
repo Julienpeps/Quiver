@@ -2,6 +2,10 @@
 name = "quiver"
 version = "0.1.0"
 description = "Disposable assessment-scoped penetration-testing environments"
+authors = [{ name = "Julienpeps" }]
+license = "MIT"
+license-files = ["LICENSE"]
+readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "filelock>=4.0.1",
@@ -9,6 +13,10 @@ dependencies = [
     "pyyaml>=6.0.3",
     "typer>=0.27.2",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Julienpeps/Quiver"
+Repository = "https://github.com/Julienpeps/Quiver"
 
 [project.scripts]
 quiver = "quiver:main"

@@ -31,7 +31,7 @@ jobs:
         env:
           BASE_IMAGE: "quiver-base:${{ matrix.architecture }}"
         run: |
-          for profile in web internal cloud full; do
+          for profile in web internal external cloud full; do
             required="$(uv run python -c "from quiver.core.images import load_package_report; print(' '.join(load_package_report('$profile', '${{ matrix.platform }}').required))")"
             optional="$(uv run python -c "from quiver.core.images import load_package_report; print(' '.join(load_package_report('$profile', '${{ matrix.platform }}').optional))")"
             docker build --file "images/profiles/$profile/Dockerfile" \
@@ -53,7 +53,7 @@ jobs:
           from quiver.core.images import load_package_report
 
           platform = "${{ matrix.platform }}"
-          for profile in ("web", "internal", "cloud", "full"):
+          for profile in ("web", "internal", "external", "cloud", "full"):
               report = load_package_report(profile, platform)
               skipped = ", ".join(report.optional) or "(none)"
               print(f"[{profile}] architecture-optional packages (build-skipped if unavailable): {skipped}")

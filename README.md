@@ -84,7 +84,8 @@ quiver workspace fix-perms acme-2026       # best-effort host UID/GID normalizat
 quiver image list
 quiver image pull internal
 quiver image build internal --platform linux/arm64
-quiver image build cloud --platform linux/arm64  # AWS, Azure, GCP, Kubernetes tooling
+quiver image build external --platform linux/arm64  # external recon and OSINT tooling
+quiver image build cloud --platform linux/arm64     # AWS, Azure, GCP, Kubernetes tooling
 ```
 
 Global options: `--context NAME` (per-invocation Docker context), `--root PATH` (override `~/.quiver`), `--verbose` (log Docker commands with credential redaction), `--no-color`.

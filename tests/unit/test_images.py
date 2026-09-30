@@ -11,10 +11,20 @@ from quiver.docker.backend import DockerBackend
 def test_package_report_resolves_required_and_optional_arch_packages() -> None:
     report = load_package_report("web", "linux/arm64")
 
-    assert "nmap" in report.required
-    assert "burpsuite" in report.optional
+    assert "gobuster" in report.required
+    assert not report.optional
     assert "Profile: web" in report.text()
     assert "Platform: linux/arm64" in report.text()
+
+
+def test_external_profile_is_available_on_both_architectures() -> None:
+    arm64 = load_package_report("external", "linux/arm64")
+    amd64 = load_package_report("external", "linux/amd64")
+
+    assert {"gobuster", "findomain", "whois"} <= set(arm64.required)
+    assert "assetfinder" not in arm64.required
+    assert "assetfinder" in amd64.required
+    assert {"bbot", "dirsearch", "gau", "whatweb"} <= set(amd64.required)
 
 
 def test_cloud_profile_has_cross_arch_provider_clis_and_amd64_specialists() -> None:
@@ -52,7 +62,7 @@ def test_build_constructs_buildx_command_with_arch_report(tmp_path: Path) -> Non
     assert report.platform == "linux/arm64"
     build = next(call for call in calls if "build" in call)
     assert build[:5] == ["docker", "buildx", "build", "--load", "--platform"]
-    assert "OPTIONAL_PACKAGES=burpsuite feroxbuster" in build
+    assert "OPTIONAL_PACKAGES=" in build
 
 
 def test_base_build_requires_no_provenance_environment_variables(tmp_path: Path) -> None:

@@ -1,22 +1,19 @@
-# TEMPORARY REVIEW DRAFT — not loaded by Quiver builds.
+# Reviewed package manifest for the Quiver external profile.
 # Source: ~/Downloads/osint_3.1.18_amd64.csv
 # Validated 2026-09-22 against Arch x86_64 core/extra, Arch Linux ARM aarch64
-# core/extra, and BlackArch x86_64 package database snapshots.
+# core/extra, and BlackArch x86_64 package database snapshots. A live ARM build
+# reclassified bbot, dirsearch, gau, and whatweb as amd64-only after ALARM drift.
 # `packages` are available on both architectures. `arch.amd64.packages`
 # are x86_64-only (frequently BlackArch) and must remain architecture-gated.
 # Matching is exact/normalized, plus documented command-to-package aliases.
 # CSV rows: 81; package matches: 52; unresolved labels: 28.
-# See docs/research/tool-package-validation.md before promoting this draft.
+# See docs/research/tool-package-validation.md for validation methodology and caveats.
 profile: external
 inherits: base
 packages:
   - asciinema
-  - bbot
-  - dirsearch
-  - gau
   - gobuster
   - findomain
-  - firefox
   - fzf
   - glow
   - gron
@@ -26,7 +23,6 @@ packages:
   - rlwrap
   - rsync
   - tig
-  - whatweb
   - whois
   - yarn
   - yt-dlp
@@ -34,7 +30,10 @@ arch:
   amd64:
     packages:
       - assetfinder
+      - bbot
       - creds
+      - dirsearch
+      - gau
       - dnsenum
       - finalrecon
       - gf
@@ -63,6 +62,7 @@ arch:
       - theharvester
       - trevorspray
       - uberfile
+      - whatweb
       - waybackurls
       - wesng
       - whatportis

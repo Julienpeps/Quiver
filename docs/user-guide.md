@@ -31,6 +31,8 @@ Built-in profile names resolve to local-style tags:
 | `base` | `quiver-base:stable` |
 | `web` | `quiver-web:stable` |
 | `internal` | `quiver-internal:stable` |
+| `external` | `quiver-external:stable` |
+| `cloud` | `quiver-cloud:stable` |
 | `full` | `quiver-full:stable` |
 
 This repository has a release workflow but does **not** currently publish those tags to a public registry. Therefore `quiver image pull base` and a first `quiver start NAME` correctly fail until you either build the images locally or publish/pull a fully-qualified registry image.
@@ -58,6 +60,7 @@ From the repository root:
 # Apple Silicon / ARM Docker daemon
 uv run quiver image build base --platform linux/arm64
 uv run quiver image build internal --platform linux/arm64
+uv run quiver image build external --platform linux/arm64
 uv run quiver image build cloud --platform linux/arm64
 
 # Intel / AMD Docker daemon
@@ -70,6 +73,7 @@ Build the base first. Then select the profile you need:
 ```bash
 uv run quiver image build web
 uv run quiver image build internal
+uv run quiver image build external
 uv run quiver image build cloud
 uv run quiver image build full
 ```
@@ -113,7 +117,7 @@ docker build \
   --tag "quiver-$PROFILE:stable" .
 ```
 
-Use `PROFILE=web`, `PROFILE=internal`, `PROFILE=cloud`, or `PROFILE=full` for those profiles. Confirm the local image exists before starting an assessment:
+Use `PROFILE=web`, `PROFILE=internal`, `PROFILE=external`, `PROFILE=cloud`, or `PROFILE=full` for those profiles. Confirm the local image exists before starting an assessment:
 
 ```bash
 docker image inspect quiver-base:stable
@@ -262,7 +266,7 @@ Audit metadata and recordings live under the assessment workspace's `.logs/` dir
 
 ## 7. Publish images for a team (optional)
 
-The `release-images` GitHub Actions workflow builds both architectures and publishes `base`, `web`, `internal`, and `full` profiles. Trigger it manually with:
+The `release-images` GitHub Actions workflow builds both architectures and publishes `base`, `web`, `internal`, `external`, `cloud`, and `full` profiles. Trigger it manually with:
 
 - a repository such as `ghcr.io/<owner>/quiver`;
 - a version and date tag;

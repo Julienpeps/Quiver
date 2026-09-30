@@ -13,4 +13,4 @@ RUN test -n "$REQUIRED_PACKAGES" \
        done \
     && pacman -Scc --noconfirm
 
-COPY packages/internal.yaml /etc/quiver/packages/internal.yaml
+COPY packages/external.yaml /etc/quiver/packages/external.yaml

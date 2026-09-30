@@ -4,9 +4,9 @@
 
 ## Method and scope
 
-On 2026-09-22 I de-duplicated the `arch.amd64.packages` entries in `packages/drafts/{internal,osint,web}.yaml` (165 names), then queried exact names through the [AUR RPC v5 multi-info endpoint](https://aur.archlinux.org/rpc/v5/info?arg[]=ffuf). The documented API returns exact package metadata; 64 names matched and 101 did not. For each match, I read the current first-party AUR `PKGBUILD` and used its `arch` declaration plus source/build/dependency inspection—not a search result—as the ARM judgement. The AUR describes itself as user-contributed build recipes, not a binary repository ([ArchWiki](https://wiki.archlinux.org/title/Arch_User_Repository)); `arch=any` therefore means the recipe claims architecture independence, **not** a tested ALARM binary.
+On 2026-09-22 I de-duplicated the `arch.amd64.packages` entries in the reviewed `internal`, `external`, and `web` manifests (165 names), then queried exact names through the [AUR RPC v5 multi-info endpoint](https://aur.archlinux.org/rpc/v5/info?arg[]=ffuf). The documented API returns exact package metadata; 64 names matched and 101 did not. For each match, I read the current first-party AUR `PKGBUILD` and used its `arch` declaration plus source/build/dependency inspection—not a search result—as the ARM judgement. The AUR describes itself as user-contributed build recipes, not a binary repository ([ArchWiki](https://wiki.archlinux.org/title/Arch_User_Repository)); `arch=any` therefore means the recipe claims architecture independence, **not** a tested ALARM binary.
 
-This is a point-in-time screen, not a successful aarch64 build test. It is intentionally limited to names that the drafts currently put behind the amd64 gate. `docs/research/tool-package-validation.md` remains authoritative for the important prior result: BlackArch is x86_64-only and must not be used to fill an ARM manifest.
+This is a point-in-time screen, not a successful aarch64 build test. It is intentionally limited to names that the reviewed manifests put behind the amd64 gate. `docs/research/tool-package-validation.md` remains authoritative for the important prior result: BlackArch is x86_64-only and must not be used to fill an ARM manifest.
 
 ## Results
 
@@ -14,7 +14,7 @@ This is a point-in-time screen, not a successful aarch64 build test. It is inten
 
 These exact AUR recipes declare `aarch64` or `any` and obtain source/build locally (rather than an obviously x86_64-only release). They are reasonable *candidates for a clean aarch64 build trial*, not approval to add to a manifest.
 
-| Screen | draft candidates | Why |
+| Screen | manifest candidates | Why |
 |---|---|---|
 | Explicit `aarch64` | [alterx](https://aur.archlinux.org/packages/alterx), [bloodhound](https://aur.archlinux.org/packages/bloodhound), [ffuf](https://aur.archlinux.org/packages/ffuf), [ligolo-ng](https://aur.archlinux.org/packages/ligolo-ng), [netdiscover](https://aur.archlinux.org/packages/netdiscover), [ngrok](https://aur.archlinux.org/packages/ngrok), [rusthound-ce](https://aur.archlinux.org/packages/rusthound-ce), [subfinder](https://aur.archlinux.org/packages/subfinder), [uncover](https://aur.archlinux.org/packages/uncover) | Recipe explicitly permits aarch64. Most compile Go/Rust/C sources; `ngrok` instead selects an upstream aarch64 binary, so it is runnable but less independently reproducible. |
 | `any`, source/script recipe | [arjun](https://aur.archlinux.org/packages/arjun), [bqm](https://aur.archlinux.org/packages/bqm), [dirsearch](https://aur.archlinux.org/packages/dirsearch), [enum4linux-ng](https://aur.archlinux.org/packages/enum4linux-ng), [evil-winrm-py](https://aur.archlinux.org/packages/evil-winrm-py), [feroxbuster](https://aur.archlinux.org/packages/feroxbuster), [gau](https://aur.archlinux.org/packages/gau), [haiti](https://aur.archlinux.org/packages/haiti), [holehe](https://aur.archlinux.org/packages/holehe), [joomscan](https://aur.archlinux.org/packages/joomscan), [patator](https://aur.archlinux.org/packages/patator), [polenum](https://aur.archlinux.org/packages/polenum), [recon-ng](https://aur.archlinux.org/packages/recon-ng), [responder](https://aur.archlinux.org/packages/responder), [sherlock](https://aur.archlinux.org/packages/sherlock), [sliver](https://aur.archlinux.org/packages/sliver), [smbmap](https://aur.archlinux.org/packages/smbmap), [waybackurls](https://aur.archlinux.org/packages/waybackurls), [weevely](https://aur.archlinux.org/packages/weevely), [xsstrike](https://aur.archlinux.org/packages/xsstrike) | Python/Ruby/Perl scripts or a native build from checksummed source. Native programs marked `any` should still produce an aarch64 package in the isolated build. |
@@ -31,7 +31,7 @@ The current AUR recipes explicitly restrict the package to x86_64/i686: `amass`,
 
 Also reject the three `any` matches as substitutes: `burpsuite` packages a vendor desktop JAR/distribution and needs runtime verification; `maltego` repackages a vendor Linux ZIP with no aarch64 proof; and `chisel` is the Chisel hardware-description-language package, not necessarily the intended tunnelling tool. They demonstrate why exact package-name matching alone is unsafe.
 
-The remaining **101 of 165** draft names returned no exact AUR package. “No AUR match” is not an installation method; assess the upstream project and a pinned build independently. In particular, do not translate their BlackArch/amd64 draft placement into an ARM AUR assumption.
+The remaining **101 of 165** manifest names returned no exact AUR package. “No AUR match” is not an installation method; assess the upstream project and a pinned build independently. In particular, do not translate their BlackArch/amd64 placement into an ARM AUR assumption.
 
 ## Operational, security, and reproducibility trade-offs
 

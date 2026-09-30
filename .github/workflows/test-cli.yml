@@ -21,18 +21,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-groups --frozen
       - name: Run unit tests
-        env:
-          COLUMNS: "200"
-        run: |
-          set +e
-          uv run pytest tests/unit > /tmp/pytest.log 2>&1
-          status=$?
-          cat /tmp/pytest.log
-          if [ "$status" -ne 0 ]; then
-            message="$(tail -n 20 /tmp/pytest.log | python3 -c 'import sys; print(sys.stdin.read().replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"), end="")')"
-            echo "::error title=Unit tests failed::$message"
-            exit "$status"
-          fi
+        run: uv run pytest tests/unit
       - name: Lint
         run: uv run ruff check .
       - name: Smoke-test CLI

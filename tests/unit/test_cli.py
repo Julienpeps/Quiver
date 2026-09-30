@@ -1,5 +1,6 @@
 from typing import get_type_hints
 
+from typer.main import get_command
 from typer.testing import CliRunner
 
 from quiver.cli import (
@@ -12,20 +13,23 @@ from quiver.cli import (
 )
 
 
-def test_cli_displays_help_without_a_command(monkeypatch) -> None:
-    # Pin a wide terminal: rich-rendered help truncates long option names
-    # (e.g. "--packages" -> "--pack...") on narrow terminals such as CI runners.
-    monkeypatch.setenv("COLUMNS", "200")
+def _command_options(name: str) -> set[str]:
+    command = get_command(app).commands[name]
+    return {option for parameter in command.params for option in parameter.opts}
 
+
+def test_cli_displays_help_without_a_command() -> None:
     result = CliRunner().invoke(app, ["--help"])
-
-    assert result.exit_code == 0
-    assert "Disposable assessment-scoped" in result.output
-    assert "gui" in result.output
     start = CliRunner().invoke(app, ["start", "--help"])
     edit = CliRunner().invoke(app, ["edit", "--help"])
-    assert "--packages" in start.output
-    assert "--packages" in edit.output
+
+    assert result.exit_code == 0
+    assert start.exit_code == 0
+    assert edit.exit_code == 0
+    assert "Disposable assessment-scoped" in result.output
+    assert "gui" in result.output
+    assert "--packages" in _command_options("start")
+    assert "--packages" in _command_options("edit")
 
 
 def test_all_assessment_commands_use_dynamic_name_completion() -> None:

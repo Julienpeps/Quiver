@@ -12,7 +12,11 @@ from quiver.cli import (
 )
 
 
-def test_cli_displays_help_without_a_command() -> None:
+def test_cli_displays_help_without_a_command(monkeypatch) -> None:
+    # Pin a wide terminal: rich-rendered help truncates long option names
+    # (e.g. "--packages" -> "--pack...") on narrow terminals such as CI runners.
+    monkeypatch.setenv("COLUMNS", "200")
+
     result = CliRunner().invoke(app, ["--help"])
 
     assert result.exit_code == 0

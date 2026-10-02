@@ -8,10 +8,16 @@ RUN sed -i '/^\[options\]/a DisableSandbox' /etc/pacman.conf \
     && pacman-key --init \
     && pacman-key --populate archlinux \
     && pacman -Syu --noconfirm --needed \
-        asciinema ca-certificates curl eza fish firefox git iproute2 iptables-nft neovim nftables \
-        novnc openvpn python python-pyyaml starship sudo supervisor tigervnc tmux util-linux \
-        websockify wireguard-go wireguard-tools xorg-xauth xterm xfce4 xfce4-terminal \
-        zoxide zsh \
+        asciinema ca-certificates curl eza fish firefox git go iproute2 iptables-nft neovim nftables \
+        openvpn python python-pip python-pyyaml starship sudo supervisor tigervnc tmux util-linux \
+        wireguard-tools xorg-xauth xterm xfce4 xfce4-terminal zoxide zsh \
+    && python -m venv /opt/quiver-websockify \
+    && /opt/quiver-websockify/bin/pip install --no-cache-dir websockify \
+    && ln -s /opt/quiver-websockify/bin/websockify /usr/local/bin/websockify \
+    && git clone --depth 1 https://github.com/novnc/noVNC.git /opt/novnc \
+    && git clone --depth 1 https://github.com/WireGuard/wireguard-go.git /tmp/wireguard-go \
+    && (cd /tmp/wireguard-go && go build -o /usr/local/bin/wireguard-go) \
+    && rm -rf /tmp/wireguard-go \
     && curl --fail --location --silent --show-error --retry 5 --retry-all-errors \
         https://blackarch.org/strap.sh --output /tmp/strap.sh \
     && chmod +x /tmp/strap.sh \

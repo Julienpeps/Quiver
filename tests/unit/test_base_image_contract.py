@@ -9,6 +9,13 @@ def test_amd64_image_installs_and_exposes_runtime_contract() -> None:
 
     assert "FROM archlinux:base-devel" in dockerfile
     assert "blackarch-keyring" in dockerfile
+    pacman_install = dockerfile.split("    && python -m venv", maxsplit=1)[0]
+    for unavailable_package in ("novnc", "websockify", "wireguard-go"):
+        assert unavailable_package not in pacman_install
+    assert "python -m venv /opt/quiver-websockify" in dockerfile
+    assert "/opt/quiver-websockify/bin/pip install --no-cache-dir websockify" in dockerfile
+    assert "https://github.com/novnc/noVNC.git" in dockerfile
+    assert "https://github.com/WireGuard/wireguard-go.git" in dockerfile
     assert "quiver-entrypoint" in dockerfile
     assert "quiver-record-shell" in dockerfile
     assert "quiver-vpn" in dockerfile

@@ -121,9 +121,7 @@ Shell completion (Bash/Zsh/Fish/PowerShell): `quiver --install-completion`.
 
 ```text
 src/quiver/        CLI, config models, lifecycle, Docker backend, VPN, audit, services
-images/            amd64/arm64 base Dockerfiles and shared container scripts
-packages/          architecture-aware package manifests for image profiles
-services/          built-in external service definitions (e.g. BloodHound CE)
+src/quiver/resources/ bundled Docker build context, package manifests, and service definitions
 tests/             unit tests + Docker integration tests
 docs/              implementation specification
 .github/workflows/ unit/integration tests, multi-arch image build, release publishing

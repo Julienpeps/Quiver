@@ -29,11 +29,11 @@ jobs:
           - platform: linux/amd64
             architecture: amd64
             runner: ubuntu-24.04
-            dockerfile: images/base/Dockerfile.amd64
+            dockerfile: src/quiver/resources/images/base/Dockerfile.amd64
           - platform: linux/arm64
             architecture: arm64
             runner: ubuntu-24.04-arm
-            dockerfile: images/base/Dockerfile.arm64
+            dockerfile: src/quiver/resources/images/base/Dockerfile.arm64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -47,16 +47,16 @@ jobs:
           echo "$GITHUB_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
           architecture="${{ matrix.architecture }}"
           docker build --file "${{ matrix.dockerfile }}" \
-            --tag "$IMAGE-base:${VERSION}-${architecture}" .
+            --tag "$IMAGE-base:${VERSION}-${architecture}" src/quiver/resources
           docker push "$IMAGE-base:${VERSION}-${architecture}"
           for profile in web internal external cloud full; do
             required="$(uv run python -c "from quiver.core.images import load_package_report; print(' '.join(load_package_report('$profile', '${{ matrix.platform }}').required))")"
             optional="$(uv run python -c "from quiver.core.images import load_package_report; print(' '.join(load_package_report('$profile', '${{ matrix.platform }}').optional))")"
-            docker build --file "images/profiles/$profile/Dockerfile" \
+            docker build --file "src/quiver/resources/images/profiles/$profile/Dockerfile" \
               --build-arg "BASE_IMAGE=$IMAGE-base:${VERSION}-${architecture}" \
               --build-arg "REQUIRED_PACKAGES=$required" \
               --build-arg "OPTIONAL_PACKAGES=$optional" \
-              --tag "$IMAGE-$profile:${VERSION}-${architecture}" .
+              --tag "$IMAGE-$profile:${VERSION}-${architecture}" src/quiver/resources
             docker push "$IMAGE-$profile:${VERSION}-${architecture}"
           done
   manifest:

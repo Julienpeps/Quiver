@@ -1,3 +1,4 @@
+from importlib.resources import files
 from pathlib import Path
 
 from quiver.core.browser import BrowserLauncher
@@ -26,7 +27,7 @@ def test_gui_url_uses_novnc_remote_resize() -> None:
 
 
 def test_gui_script_keeps_vnc_private_without_authentication() -> None:
-    script = Path("images/common/gui/quiver-gui").read_text()
+    script = (Path(str(files("quiver.resources"))) / "images/common/gui/quiver-gui").read_text()
 
     assert "gui-password" not in script
     assert "vncpasswd -f" not in script

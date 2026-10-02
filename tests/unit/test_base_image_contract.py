@@ -1,6 +1,7 @@
+from importlib.resources import files
 from pathlib import Path
 
-ROOT = Path(__file__).parents[2]
+ROOT = Path(str(files("quiver.resources")))
 
 
 def test_amd64_image_installs_and_exposes_runtime_contract() -> None:

@@ -1,3 +1,4 @@
+from importlib.resources import files
 from pathlib import Path
 
 import pytest
@@ -94,8 +95,9 @@ def test_base_interface_must_differ_from_tunnel() -> None:
 
 
 def test_vpn_scripts_keep_firewall_rules_after_tunnel_exit() -> None:
-    script = Path("images/common/supervisor/quiver-vpn").read_text()
-    helper = Path("images/common/supervisor/quiver-killswitch.py").read_text()
+    root = Path(str(files("quiver.resources")))
+    script = (root / "images/common/supervisor/quiver-vpn").read_text()
+    helper = (root / "images/common/supervisor/quiver-killswitch.py").read_text()
 
     assert "quiver-killswitch.py" in script
     assert "nft delete table" not in script

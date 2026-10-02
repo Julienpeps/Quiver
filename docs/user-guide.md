@@ -88,16 +88,16 @@ If `uv run quiver doctor` still reports **Buildx** unavailable (neither `docker 
 
 ```bash
 docker build \
-  --file images/base/Dockerfile.arm64 \
-  --tag quiver-base:stable .
+  --file src/quiver/resources/images/base/Dockerfile.arm64 \
+  --tag quiver-base:stable src/quiver/resources
 ```
 
 **AMD64:**
 
 ```bash
 docker build \
-  --file images/base/Dockerfile.amd64 \
-  --tag quiver-base:stable .
+  --file src/quiver/resources/images/base/Dockerfile.amd64 \
+  --tag quiver-base:stable src/quiver/resources
 ```
 
 Build a profile manually by resolving its package manifest for the platform and passing those values to Docker. Example for ARM64 `internal`:
@@ -111,10 +111,10 @@ OPTIONAL_PACKAGES="$(uv run python -c \
   "from quiver.core.images import load_package_report; print(' '.join(load_package_report('$PROFILE', '$PLATFORM').optional))")"
 
 docker build \
-  --file "images/profiles/$PROFILE/Dockerfile" \
+  --file "src/quiver/resources/images/profiles/$PROFILE/Dockerfile" \
   --build-arg "REQUIRED_PACKAGES=$REQUIRED_PACKAGES" \
   --build-arg "OPTIONAL_PACKAGES=$OPTIONAL_PACKAGES" \
-  --tag "quiver-$PROFILE:stable" .
+  --tag "quiver-$PROFILE:stable" src/quiver/resources
 ```
 
 Use `PROFILE=web`, `PROFILE=internal`, `PROFILE=external`, `PROFILE=cloud`, or `PROFILE=full` for those profiles. Confirm the local image exists before starting an assessment:

@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
+from importlib.resources import files
+from importlib.resources.abc import Traversable
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any, Literal
 
 import yaml
@@ -37,17 +42,18 @@ class PackageReport:
         )
 
 
-def _manifest_root() -> Path:
-    return Path(__file__).parents[3] / "packages"
+def _manifest_root() -> Traversable:
+    """Return package manifests bundled with the installed distribution."""
+    return files("quiver.resources").joinpath("packages")
 
 
 def load_package_report(
     profile: str,
     platform: Platform,
-    manifest_root: Path | None = None,
+    manifest_root: Path | Traversable | None = None,
 ) -> PackageReport:
     """Load a profile manifest and resolve mandatory/optional packages for an architecture."""
-    root = manifest_root or _manifest_root()
+    root = manifest_root if manifest_root is not None else _manifest_root()
     manifest_path = root / f"{profile}.yaml"
     if not manifest_path.is_file():
         raise ImageError(f"unknown image profile: {profile}")
@@ -91,7 +97,9 @@ class ImageManager:
 
     def __init__(self, docker: DockerBackend, repository_root: Path | None = None) -> None:
         self.docker = docker
-        self.repository_root = repository_root or Path(__file__).parents[3]
+        # This injection point is retained for tests and external build contexts.
+        # Normal installations build from assets bundled in the wheel.
+        self.repository_root = repository_root
 
     def list(self) -> list[tuple[str, str]]:
         """Return built-in profile names and their default references."""
@@ -113,28 +121,31 @@ class ImageManager:
         if target not in ("linux/amd64", "linux/arm64"):
             raise ImageError("unsupported build platform: " + str(target))
         report = load_package_report(profile, target)
-        dockerfile = self._dockerfile(profile, target)
-        if not dockerfile.is_file():
-            raise ImageError(f"no Dockerfile for profile {profile} on {target}")
-        args = [
-            "build",
-            "--load",
-            "--platform",
-            target,
-            "--file",
-            str(dockerfile),
-            "--tag",
-            profile_reference(profile),
-            "--build-arg",
-            f"REQUIRED_PACKAGES={' '.join(report.required)}",
-            "--build-arg",
-            f"OPTIONAL_PACKAGES={' '.join(report.optional)}",
-        ]
-        args.append(str(self.repository_root))
-        try:
-            self.docker.buildx(*args)
-        except DockerError as error:
-            raise ImageError(f"failed to build {profile} for {target}: {error}\n{report.text()}") from error
+        with self._build_context() as context_root:
+            dockerfile = self._dockerfile(context_root, profile, target)
+            if not dockerfile.is_file():
+                raise ImageError(f"no Dockerfile for profile {profile} on {target}")
+            args = [
+                "build",
+                "--load",
+                "--platform",
+                target,
+                "--file",
+                str(dockerfile),
+                "--tag",
+                profile_reference(profile),
+                "--build-arg",
+                f"REQUIRED_PACKAGES={' '.join(report.required)}",
+                "--build-arg",
+                f"OPTIONAL_PACKAGES={' '.join(report.optional)}",
+                str(context_root),
+            ]
+            try:
+                self.docker.buildx(*args)
+            except DockerError as error:
+                raise ImageError(
+                    f"failed to build {profile} for {target}: {error}\n{report.text()}"
+                ) from error
         return report
 
     def _native_platform(self) -> Platform:
@@ -162,8 +173,34 @@ class ImageManager:
             raise ImageError("image reference must not be empty or contain whitespace")
         return profile_or_reference
 
-    def _dockerfile(self, profile: str, platform: Platform) -> Path:
+    @contextmanager
+    def _build_context(self) -> Iterator[Path]:
+        """Yield a filesystem Docker context for injected or bundled assets.
+
+        Docker cannot consume :mod:`importlib.resources` traversables directly.
+        Copying bundled assets also supports non-filesystem importers.
+        """
+        if self.repository_root is not None:
+            yield self.repository_root
+            return
+        with TemporaryDirectory(prefix="quiver-build-") as directory:
+            root = Path(directory)
+            _copy_resource_tree(files("quiver.resources"), root)
+            yield root
+
+    def _dockerfile(self, context_root: Path, profile: str, platform: Platform) -> Path:
         if profile == "base":
             architecture = platform.removeprefix("linux/")
-            return self.repository_root / "images" / "base" / f"Dockerfile.{architecture}"
-        return self.repository_root / "images" / "profiles" / profile / "Dockerfile"
+            return context_root / "images" / "base" / f"Dockerfile.{architecture}"
+        return context_root / "images" / "profiles" / profile / "Dockerfile"
+
+
+def _copy_resource_tree(source: Traversable, destination: Path) -> None:
+    """Copy an importlib resource tree into Docker's filesystem-only context."""
+    destination.mkdir(parents=True, exist_ok=True)
+    for entry in source.iterdir():
+        target = destination / entry.name
+        if entry.is_dir():
+            _copy_resource_tree(entry, target)
+        else:
+            target.write_bytes(entry.read_bytes())

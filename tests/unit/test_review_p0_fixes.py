@@ -1,3 +1,4 @@
+from importlib.resources import files
 from pathlib import Path
 
 import pytest
@@ -79,11 +80,11 @@ def test_start_preflight_rejects_unsafe_daemons_before_mutation(
 
 
 def test_image_scripts_wire_audit_hook_and_asciinema() -> None:
-    repository = Path(__file__).parents[2]
-    shell = (repository / "images/common/shell/quiver-record-shell").read_text()
-    gui = (repository / "images/common/gui/quiver-gui").read_text()
+    resource_root = Path(str(files("quiver.resources")))
+    shell = (resource_root / "images/common/shell/quiver-record-shell").read_text()
+    gui = (resource_root / "images/common/gui/quiver-gui").read_text()
     for dockerfile in ("Dockerfile.amd64", "Dockerfile.arm64"):
-        contents = (repository / "images/base" / dockerfile).read_text()
+        contents = (resource_root / "images/base" / dockerfile).read_text()
         assert "asciinema" in contents
         assert "/etc/zsh/zshrc" in contents
     assert "ZDOTDIR=$session_dir" in shell

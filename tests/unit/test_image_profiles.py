@@ -1,8 +1,10 @@
+from importlib.resources import files
 from pathlib import Path
 
 from quiver.core.images import load_package_report
 
-ROOT = Path(__file__).parents[2]
+ROOT = Path(str(files("quiver.resources")))
+PROJECT_ROOT = Path(__file__).parents[2]
 
 
 def test_each_profile_has_a_data_manifest_and_build_definition() -> None:
@@ -54,9 +56,9 @@ def test_entrypoint_creates_the_host_mapped_sudo_user() -> None:
 
 
 def test_workflows_pin_actions_and_build_without_provenance_inputs() -> None:
-    test_workflow = (ROOT / ".github" / "workflows" / "test-cli.yml").read_text()
-    build_workflow = (ROOT / ".github" / "workflows" / "build-images.yml").read_text()
-    release_workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text()
+    test_workflow = (PROJECT_ROOT / ".github" / "workflows" / "test-cli.yml").read_text()
+    build_workflow = (PROJECT_ROOT / ".github" / "workflows" / "build-images.yml").read_text()
+    release_workflow = (PROJECT_ROOT / ".github" / "workflows" / "release.yml").read_text()
 
     assert "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683" in test_workflow
     assert "BLACKARCH_STRAP_" not in build_workflow

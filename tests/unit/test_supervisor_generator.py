@@ -1,10 +1,11 @@
 import subprocess
 import sys
+from importlib.resources import files
 from pathlib import Path
 
 import yaml
 
-ROOT = Path(__file__).parents[2]
+ROOT = Path(str(files("quiver.resources")))
 GENERATOR = ROOT / "images" / "common" / "entrypoint" / "generate-supervisor.py"
 
 

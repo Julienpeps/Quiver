@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Build from the repository root: docker build -f images/base/Dockerfile.amd64 .
+# Build from the packaged resource root: docker build -f images/base/Dockerfile.amd64 .
 FROM archlinux:base-devel
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -26,7 +26,7 @@ COPY images/common/shell/quiver-audit-hook.zsh /usr/local/lib/quiver/quiver-audi
 COPY images/common/shell/quiver-audit-hook.fish /usr/local/lib/quiver/quiver-audit-hook.fish
 COPY images/common/supervisor/quiver-vpn /usr/local/bin/quiver-vpn
 COPY images/common/supervisor/quiver-killswitch.py /usr/local/lib/quiver/quiver-killswitch.py
-COPY src/quiver/vpn/killswitch.py /usr/local/lib/quiver/killswitch.py
+COPY images/common/supervisor/killswitch.py /usr/local/lib/quiver/killswitch.py
 COPY images/common/gui/quiver-gui /usr/local/bin/quiver-gui
 COPY images/common/gui/assets/quiver-background.png /usr/share/backgrounds/quiver/background.png
 COPY images/common/supervisor/supervisord.conf /etc/supervisor/supervisord.conf

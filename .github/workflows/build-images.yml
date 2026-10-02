@@ -15,18 +15,18 @@ jobs:
           - platform: linux/amd64
             architecture: amd64
             runner: ubuntu-24.04
-            dockerfile: images/base/Dockerfile.amd64
+            dockerfile: src/quiver/resources/images/base/Dockerfile.amd64
           - platform: linux/arm64
             architecture: arm64
             runner: ubuntu-24.04-arm
-            dockerfile: images/base/Dockerfile.arm64
+            dockerfile: src/quiver/resources/images/base/Dockerfile.arm64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Build base image
         run: |
           docker build --file "${{ matrix.dockerfile }}" \
-            --tag "quiver-base:${{ matrix.architecture }}" .
+            --tag "quiver-base:${{ matrix.architecture }}" src/quiver/resources
       - name: Build and smoke-test profile images
         env:
           BASE_IMAGE: "quiver-base:${{ matrix.architecture }}"
@@ -34,11 +34,11 @@ jobs:
           for profile in web internal external cloud full; do
             required="$(uv run python -c "from quiver.core.images import load_package_report; print(' '.join(load_package_report('$profile', '${{ matrix.platform }}').required))")"
             optional="$(uv run python -c "from quiver.core.images import load_package_report; print(' '.join(load_package_report('$profile', '${{ matrix.platform }}').optional))")"
-            docker build --file "images/profiles/$profile/Dockerfile" \
+            docker build --file "src/quiver/resources/images/profiles/$profile/Dockerfile" \
               --build-arg "BASE_IMAGE=$BASE_IMAGE" \
               --build-arg "REQUIRED_PACKAGES=$required" \
               --build-arg "OPTIONAL_PACKAGES=$optional" \
-              --tag "quiver-$profile:${{ matrix.architecture }}" . \
+              --tag "quiver-$profile:${{ matrix.architecture }}" src/quiver/resources \
               | tee "/tmp/quiver-build-$profile.log"
             if grep -q "Skipping unavailable optional package" "/tmp/quiver-build-$profile.log"; then
               grep "Skipping unavailable optional package" "/tmp/quiver-build-$profile.log" >> "$GITHUB_STEP_SUMMARY" || true

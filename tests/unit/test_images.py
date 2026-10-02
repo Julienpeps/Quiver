@@ -18,6 +18,13 @@ def test_package_report_resolves_required_and_optional_arch_packages() -> None:
     assert "Platform: linux/arm64" in report.text()
 
 
+def test_internal_profile_isolates_the_unresolvable_darkarmour_package() -> None:
+    report = load_package_report("internal", "linux/amd64")
+
+    assert "darkarmour" not in report.required
+    assert "darkarmour" in report.optional
+
+
 def test_external_profile_is_available_on_both_architectures() -> None:
     arm64 = load_package_report("external", "linux/arm64")
     amd64 = load_package_report("external", "linux/amd64")

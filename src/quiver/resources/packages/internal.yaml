@@ -88,7 +88,6 @@ arch:
       - creds
       - crunch
       - cupp
-      - darkarmour
       - dirb
       - dirsearch
       - dns2tcp
@@ -199,7 +198,10 @@ arch:
       - xsstrike
       - xxeinjector
       - ysoserial
-    optional: []
+    optional:
+      # BlackArch's darkarmour package currently depends on the removed
+      # lib32-libcurl-gnutls package through osslsigncode.
+      - darkarmour
   arm64:
     packages: []
     optional: []

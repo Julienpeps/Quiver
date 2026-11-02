@@ -141,7 +141,7 @@ class ImageManager:
                 str(context_root),
             ]
             try:
-                self.docker.buildx(*args)
+                self.docker.buildx(*args, stream=True)
             except DockerError as error:
                 raise ImageError(
                     f"failed to build {profile} for {target}: {error}\n{report.text()}"

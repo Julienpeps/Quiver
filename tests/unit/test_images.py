@@ -55,9 +55,12 @@ def test_unknown_profile_has_actionable_error() -> None:
 
 def test_build_constructs_buildx_command_with_arch_report(tmp_path: Path) -> None:
     calls: list[list[str]] = []
+    build_streamed: list[bool] = []
 
     def runner(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
         calls.append(args)
+        if "build" in args:
+            build_streamed.append(not kwargs["capture_output"])
         return subprocess.CompletedProcess(args, 0, "", "")
 
     repository = tmp_path
@@ -71,6 +74,7 @@ def test_build_constructs_buildx_command_with_arch_report(tmp_path: Path) -> Non
     build = next(call for call in calls if "build" in call)
     assert build[:5] == ["docker", "buildx", "build", "--load", "--platform"]
     assert "OPTIONAL_PACKAGES=" in build
+    assert build_streamed == [True]
 
 
 def test_base_build_requires_no_provenance_environment_variables(tmp_path: Path) -> None:

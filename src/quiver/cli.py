@@ -610,11 +610,13 @@ def image_build(
     state = _state(context)
     if platform not in (None, "linux/amd64", "linux/arm64"):
         _abort(ImageError("platform must be linux/amd64 or linux/arm64"), 2)
+    typer.echo(f"Building {profile} with Docker Buildx…", err=True)
     try:
         report = ImageManager(state.backend()).build(profile, platform)
     except (ImageError, DockerError) as error:
         _abort(error, 4)
     typer.echo(report.text())
+    typer.echo(f"Built quiver-{profile}:stable")
 
 
 @app.command()

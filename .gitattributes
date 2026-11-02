@@ -1,0 +1,2 @@
+# Scripts copied into Linux containers must retain Unix line endings.
+src/quiver/resources/images/** text eol=lf

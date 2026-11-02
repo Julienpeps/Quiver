@@ -203,4 +203,9 @@ def _copy_resource_tree(source: Traversable, destination: Path) -> None:
         if entry.is_dir():
             _copy_resource_tree(entry, target)
         else:
-            target.write_bytes(entry.read_bytes())
+            data = entry.read_bytes()
+            # Docker executes bundled shell scripts directly.  A CRLF shebang
+            # makes env look for a command named ``bash\r``.
+            if data.startswith(b"#!"):
+                data = data.replace(b"\r\n", b"\n")
+            target.write_bytes(data)

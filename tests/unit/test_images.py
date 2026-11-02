@@ -5,7 +5,12 @@ from typing import Any
 
 import pytest
 
-from quiver.core.images import ImageError, ImageManager, load_package_report
+from quiver.core.images import (
+    ImageError,
+    ImageManager,
+    _copy_resource_tree,
+    load_package_report,
+)
 from quiver.docker.backend import DockerBackend
 
 
@@ -91,6 +96,17 @@ def test_base_build_requires_no_provenance_environment_variables(tmp_path: Path)
     ImageManager(DockerBackend(runner=runner), tmp_path).build("base", "linux/arm64")
 
     assert not any("BLACKARCH_STRAP" in argument or "ARCHLINUXARM_ROOTFS" in argument for argument in calls[0])
+
+
+def test_materialized_shebang_scripts_use_unix_line_endings(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.mkdir()
+    (source / "entrypoint").write_bytes(b"#!/usr/bin/env bash\r\nset -eu\r\n")
+
+    _copy_resource_tree(source, destination)
+
+    assert (destination / "entrypoint").read_bytes() == b"#!/usr/bin/env bash\nset -eu\n"
 
 
 def test_bundled_assets_are_materialized_as_a_complete_docker_context() -> None:

@@ -35,6 +35,7 @@ class CommandResult:
 
 Runner = Callable[..., subprocess.CompletedProcess[str]]
 InteractiveRunner = Callable[..., subprocess.CompletedProcess[object]]
+ProcessRunner = Callable[..., subprocess.Popen[bytes]]
 CommandObserver = Callable[[str], None]
 
 
@@ -47,12 +48,14 @@ class DockerBackend:
         executable: str = "docker",
         runner: Runner = subprocess.run,
         interactive_runner: InteractiveRunner = subprocess.run,
+        process_runner: ProcessRunner = subprocess.Popen,
         on_command: CommandObserver | None = None,
     ) -> None:
         self.context = context
         self.executable = executable
         self._runner = runner
         self._interactive_runner = interactive_runner
+        self._process_runner = process_runner
         self.on_command = on_command
         self._docker_plugins: set[str] = set()
         self._standalone_plugins: set[str] = set()
@@ -132,6 +135,68 @@ class DockerBackend:
     def _raise_for_result(result: CommandResult) -> None:
         detail = result.stderr.strip() or result.stdout.strip() or "unknown Docker error"
         raise DockerError(f"Docker command failed ({result.returncode}): {detail}")
+
+    def start_exec(
+        self,
+        container: str,
+        command: Sequence[str] | str,
+        *,
+        tty: bool = False,
+        shell: bool = False,
+        user: str | None = None,
+        workdir: str | None = None,
+        environment: dict[str, str] | None = None,
+        stdin: Any = subprocess.PIPE,
+        stdout: Any = subprocess.PIPE,
+        stderr: Any = subprocess.PIPE,
+    ) -> subprocess.Popen[bytes]:
+        """Start a managed ``docker exec`` process without buffering its output.
+
+        ``command`` is argv by default.  Shell mode deliberately accepts only a
+        string and invokes ``/bin/sh -lc`` inside the container, making shell
+        composition explicit instead of silently changing argv semantics.
+        Stream endpoints are injectable so a PTY broker can attach a terminal
+        while non-PTY callers retain separate stdout and stderr pipes.
+        """
+        if not container:
+            raise DockerError("container name is required")
+        if shell and not isinstance(command, str):
+            raise DockerError("shell execution requires a command string")
+        if not shell and isinstance(command, str):
+            raise DockerError("argv execution requires a sequence of arguments")
+        if not command:
+            raise DockerError("exec requires a command")
+
+        argv = ["/bin/sh", "-lc", command] if shell else list(command)
+        args = ["exec", "--interactive"]
+        if tty:
+            args.append("--tty")
+        if user:
+            args.extend(("--user", user))
+        if workdir:
+            args.extend(("--workdir", workdir))
+        for key, value in (environment or {}).items():
+            if not key or "=" in key:
+                raise DockerError(f"invalid environment variable name: {key!r}")
+            args.extend(("--env", f"{key}={value}"))
+        args.extend((container, *argv))
+        rendered = self.format_command(args)
+        if self.on_command is not None:
+            self.on_command(rendered)
+        try:
+            return self._process_runner(
+                self.command(*args),
+                stdin=stdin,
+                stdout=stdout,
+                stderr=stderr,
+                start_new_session=True,
+            )
+        except FileNotFoundError as error:
+            raise DockerUnavailableError(
+                f"Docker executable {self.executable!r} was not found"
+            ) from error
+        except OSError as error:
+            raise DockerUnavailableError(f"could not execute Docker: {error}") from error
 
     def run_interactive(self, *args: str) -> int:
         """Run Docker attached to this process's standard streams."""

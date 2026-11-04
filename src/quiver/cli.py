@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import shutil
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 import typer
 
@@ -37,6 +37,7 @@ from quiver.core.workspaces import (
 from quiver.docker.backend import DockerBackend, DockerError
 from quiver.docker.inspect import published_port
 from quiver.errors import ImageUnavailableError, VpnError
+from quiver.mcp.server import run as run_mcp_server
 from quiver.models.config import (
     AssessmentConfig,
     ConfigError,
@@ -617,6 +618,18 @@ def image_build(
         _abort(error, 4)
     typer.echo(report.text())
     typer.echo(f"Built quiver-{profile}:stable")
+
+
+@app.command("mcp")
+def mcp_server(
+    context: typer.Context,
+    transport: Annotated[Literal["stdio", "streamable-http"], typer.Option(help="MCP transport.")] = "stdio",
+    host: Annotated[str, typer.Option(help="HTTP bind address.")] = "127.0.0.1",
+    port: Annotated[int, typer.Option(help="HTTP port.")] = 8000,
+) -> None:
+    """Run the local Model Context Protocol server."""
+    state = _state(context)
+    run_mcp_server(state.root, state.context, transport=transport, host=host, port=port)
 
 
 @app.command()

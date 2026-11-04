@@ -141,6 +141,22 @@ class AuditManager:
             raise AuditError(f"replay tool is not installed: {command[0]}") from error
         return completed.returncode
 
+    def record_exec(
+        self,
+        config: AssessmentConfig,
+        command: list[str] | str,
+        started: datetime,
+        ended: datetime,
+        exit_code: int,
+        stdout: str,
+        stderr: str,
+    ) -> Path:
+        """Persist execution output using the same artifacts as CLI exec."""
+        normalized = [command] if isinstance(command, str) else command
+        return self._write_exec_artifacts(
+            Path(config.workspace.path), normalized, started, ended, exit_code, stdout, stderr
+        )
+
     @staticmethod
     def _write_exec_artifacts(
         workspace: Path,

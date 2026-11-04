@@ -26,6 +26,65 @@ def test_backend_translates_missing_executable() -> None:
         DockerBackend(runner=missing_runner).run("version")
 
 
+def test_backend_builds_explicit_argv_exec_without_shell() -> None:
+    seen: list[tuple[list[str], dict[str, Any]]] = []
+
+    class FakeProcess:
+        pass
+
+    def process(args: list[str], **kwargs: Any) -> FakeProcess:
+        seen.append((args, kwargs))
+        return FakeProcess()
+
+    backend = DockerBackend(context="testing", process_runner=process)
+
+    result = backend.start_exec(
+        "quiver-demo",
+        ["printf", "hello world"],
+        user="1000:1000",
+        workdir="/workspace",
+        environment={"TERM": "xterm"},
+    )
+
+    assert result.__class__ is FakeProcess
+    assert seen == [
+        (
+            [
+                "docker",
+                "--context",
+                "testing",
+                "exec",
+                "--interactive",
+                "--user",
+                "1000:1000",
+                "--workdir",
+                "/workspace",
+                "--env",
+                "TERM=xterm",
+                "quiver-demo",
+                "printf",
+                "hello world",
+            ],
+            {
+                "stdin": subprocess.PIPE,
+                "stdout": subprocess.PIPE,
+                "stderr": subprocess.PIPE,
+                "start_new_session": True,
+            },
+        )
+    ]
+
+
+def test_backend_shell_exec_requires_explicit_string() -> None:
+    backend = DockerBackend(process_runner=lambda *args, **kwargs: pytest.fail("not started"))
+
+    with pytest.raises(DockerError, match="shell execution requires"):
+        backend.start_exec("quiver-demo", ["echo", "hello"], shell=True)
+
+    with pytest.raises(DockerError, match="argv execution requires"):
+        backend.start_exec("quiver-demo", "echo hello")
+
+
 def test_backend_runs_interactive_commands_without_capturing_streams() -> None:
     seen: list[list[str]] = []
 

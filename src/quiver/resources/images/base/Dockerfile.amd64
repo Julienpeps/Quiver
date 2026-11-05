@@ -11,7 +11,8 @@ RUN sed -i '/^\[options\]/a DisableSandbox' /etc/pacman.conf \
         asciinema ca-certificates curl eza fish firefox git go iproute2 iptables-nft neovim nftables \
         openvpn python python-pip python-pyyaml starship sudo supervisor tigervnc tmux util-linux \
         wireguard-tools xorg-xauth xterm xfce4 xfce4-terminal zoxide zsh \
-    && python -m venv /opt/quiver-websockify \
+    && python -m venv --without-pip /opt/quiver-websockify \
+    && curl -fsSL https://bootstrap.pypa.io/get-pip.py | /opt/quiver-websockify/bin/python - \
     && /opt/quiver-websockify/bin/pip install --no-cache-dir websockify \
     && ln -s /opt/quiver-websockify/bin/websockify /usr/local/bin/websockify \
     && git clone --depth 1 https://github.com/novnc/noVNC.git /opt/novnc \

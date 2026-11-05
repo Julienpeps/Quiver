@@ -34,8 +34,9 @@ def test_base_dockerfiles_bootstrap_without_caller_supplied_inputs() -> None:
     assert "rm -rf /rootfs/usr/lib/firmware /rootfs/usr/lib/modules" in arm64
     assert "ARCHLINUXARM_ROOTFS_" not in arm64
     assert "blackarch.org/strap.sh" not in arm64
-    assert "python -m venv /opt/quiver-websockify" in arm64
+    assert "python -m venv --without-pip /opt/quiver-websockify" in arm64
     assert "/opt/quiver-websockify/bin/pip install --no-cache-dir websockify" in arm64
+    assert "https://bootstrap.pypa.io/get-pip.py" in arm64
     assert "--break-system-packages" not in arm64
     assert "https://github.com/novnc/noVNC.git" in arm64
     assert "https://github.com/WireGuard/wireguard-go.git" in arm64

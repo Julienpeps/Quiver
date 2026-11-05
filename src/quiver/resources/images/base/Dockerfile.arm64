@@ -21,10 +21,11 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN sed -i '/^\[options\]/a DisableSandbox' /etc/pacman.conf \
     && pacman-key --init \
     && pacman-key --populate archlinuxarm \
-    && pacman -Sy --noconfirm --needed \
+    && pacman -Syu --noconfirm --needed \
         asciinema ca-certificates curl eza fish firefox git go iproute2 iptables-nft neovim nftables \
         openvpn python python-pip python-pyyaml starship sudo supervisor tigervnc tmux util-linux \
         wireguard-tools xorg-xauth xterm xfce4 xfce4-terminal zoxide zsh \
+    && python -c 'import pyexpat; print(pyexpat.EXPAT_VERSION)' \
     && python -m venv --without-pip /opt/quiver-websockify \
     && curl -fsSL https://bootstrap.pypa.io/get-pip.py | /opt/quiver-websockify/bin/python - \
     && /opt/quiver-websockify/bin/pip install --no-cache-dir websockify \

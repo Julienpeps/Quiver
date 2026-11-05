@@ -29,8 +29,8 @@ def test_base_dockerfiles_bootstrap_without_caller_supplied_inputs() -> None:
     assert "--mount=type=cache,target=/downloads" in arm64
     assert "--continue-at -" in arm64
     assert "DisableSandbox" in arm64
-    assert "pacman -Sy --noconfirm --needed" in arm64
-    assert "pacman -Syu" not in arm64
+    assert "pacman -Syu --noconfirm --needed" in arm64
+    assert "python -c 'import pyexpat; print(pyexpat.EXPAT_VERSION)'" in arm64
     assert "rm -rf /rootfs/usr/lib/firmware /rootfs/usr/lib/modules" in arm64
     assert "ARCHLINUXARM_ROOTFS_" not in arm64
     assert "blackarch.org/strap.sh" not in arm64

@@ -27,6 +27,8 @@ jobs:
         run: |
           docker build --file "${{ matrix.dockerfile }}" \
             --tag "quiver-base:${{ matrix.architecture }}" src/quiver/resources
+          docker run --rm --entrypoint python "quiver-base:${{ matrix.architecture }}" \
+            -c 'import pyexpat; print(pyexpat.EXPAT_VERSION)'
       - name: Build and smoke-test profile images
         env:
           BASE_IMAGE: "quiver-base:${{ matrix.architecture }}"

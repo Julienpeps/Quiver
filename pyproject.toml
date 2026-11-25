@@ -10,6 +10,7 @@ requires-python = ">=3.12"
 dependencies = [
     "filelock>=4.0.1",
     "mcp>=1.0.0",
+    "pywinpty>=3.0.0; sys_platform == 'win32'",
     "pydantic>=2.13.5",
     "pyyaml>=6.0.3",
     "typer>=0.27.2",

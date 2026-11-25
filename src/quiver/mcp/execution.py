@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import errno
-import fcntl
 import logging
 import os
-import pty
 import signal
 import struct
 import subprocess
-import termios
+import sys
 import threading
 import time
 import uuid
@@ -18,11 +16,19 @@ from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from quiver.docker.backend import DockerBackend, DockerError
 
+if os.name == "nt":
+    fcntl = pty = termios = None
+else:
+    import fcntl
+    import pty
+    import termios
+
 logger = logging.getLogger(__name__)
+SIGKILL = getattr(signal, "SIGKILL", signal.SIGTERM)
 
 
 class ExecutionError(RuntimeError):
@@ -69,7 +75,7 @@ class ExecutionRead:
 class _Session:
     execution_id: str
     workspace: str
-    process: subprocess.Popen[bytes]
+    process: Any
     tty: bool
     started_at: datetime
     master_fd: int | None = None
@@ -86,7 +92,11 @@ class _Session:
     lock: threading.RLock = field(default_factory=threading.RLock)
 
     def view_running(self) -> bool:
-        return self.exit_code is None and self.process.poll() is None
+        if self.exit_code is not None:
+            return False
+        if sys.platform == "win32" and self.tty:
+            return self.process.isalive()
+        return self.process.poll() is None
 
 
 class ExecutionBroker:
@@ -137,7 +147,8 @@ class ExecutionBroker:
 
             master_fd: int | None = None
             slave_fd: int | None = None
-            if tty:
+            if tty and os.name != "nt":
+                assert pty is not None
                 master_fd, slave_fd = pty.openpty()
                 stdin = slave_fd
                 stdout = slave_fd
@@ -182,7 +193,16 @@ class ExecutionBroker:
                 chunks=deque(),
             )
             self._sessions[session.execution_id] = session
-            if tty:
+            if tty and os.name == "nt":
+                reader = threading.Thread(
+                    target=self._read_winpty,
+                    args=(session,),
+                    name=f"quiver-exec-{session.execution_id}-pty",
+                    daemon=True,
+                )
+                session.reader_threads.append(reader)
+                reader.start()
+            elif tty:
                 assert master_fd is not None
                 reader = threading.Thread(
                     target=self._read_fd,
@@ -257,7 +277,9 @@ class ExecutionBroker:
         if not session.view_running():
             raise ExecutionError("execution is not running")
         try:
-            if session.tty:
+            if session.tty and os.name == "nt":
+                session.process.write(data)
+            elif session.tty:
                 assert session.master_fd is not None
                 os.write(session.master_fd, data.encode())
             else:
@@ -273,9 +295,18 @@ class ExecutionBroker:
         session = self._get(execution_id)
         with session.lock:
             session.last_activity = time.monotonic()
-        if not session.tty or session.master_fd is None:
+        if not session.tty:
+            raise ExecutionError("execution does not have a PTY")
+        if os.name == "nt":
+            try:
+                session.process.setwinsize(rows, columns)
+            except OSError as error:
+                raise ExecutionError(f"could not resize PTY: {error}") from error
+            return
+        if session.master_fd is None:
             raise ExecutionError("execution does not have a PTY")
         try:
+            assert termios is not None and fcntl is not None
             termios.tcsetwinsize(session.master_fd, (rows, columns))
         except AttributeError:
             winsize = struct.pack("HHHH", rows, columns, 0, 0)
@@ -290,21 +321,30 @@ class ExecutionBroker:
         if not session.view_running():
             return
         try:
-            os.killpg(session.process.pid, signum)
-        except ProcessLookupError:
+            if sys.platform == "win32" and session.tty:
+                if signum == signal.SIGINT:
+                    session.process.sendintr()
+                else:
+                    session.process.terminate(force=signum == SIGKILL)
+            elif os.name == "nt":
+                session.process.kill() if signum == signal.SIGKILL else session.process.terminate()
+            else:
+                os.killpg(session.process.pid, signum)
+        except (ProcessLookupError, OSError):
             return
-        except OSError as error:
-            raise ExecutionError(f"could not signal execution: {error}") from error
 
     def close(self, execution_id: str, *, force: bool = False) -> ExecutionView:
         session = self._get(execution_id)
         if session.view_running():
-            self.signal(execution_id, signal.SIGKILL if force else signal.SIGTERM)
-            try:
-                session.process.wait(timeout=2 if not force else 0.5)
-            except subprocess.TimeoutExpired:
-                self.signal(execution_id, signal.SIGKILL)
-                session.process.wait(timeout=2)
+            self.signal(execution_id, SIGKILL if force else signal.SIGTERM)
+            if sys.platform == "win32" and session.tty:
+                session.process.wait()
+            else:
+                try:
+                    session.process.wait(timeout=2 if not force else 0.5)
+                except subprocess.TimeoutExpired:
+                    self.signal(execution_id, SIGKILL)
+                    session.process.wait(timeout=2)
         return self.view(session)
 
     def terminate_workspace(self, workspace: str) -> tuple[str, ...]:
@@ -340,6 +380,15 @@ class ExecutionBroker:
                 return
             self._append(session, channel, data)
 
+    def _read_winpty(self, session: _Session) -> None:
+        while True:
+            try:
+                data = session.process.read(65536)
+            except EOFError:
+                return
+            if data:
+                self._append(session, "terminal", data.encode())
+
     def _read_fd(self, session: _Session, fd: int, channel: Channel) -> None:
         try:
             while True:
@@ -374,6 +423,10 @@ class ExecutionBroker:
 
     def _wait_for_exit(self, session: _Session) -> None:
         code = session.process.wait()
+        if code is None and sys.platform == "win32" and session.tty:
+            code = session.process.exitstatus
+        if code is None:
+            code = 1
         for reader in session.reader_threads:
             reader.join(timeout=2)
         with session.lock:

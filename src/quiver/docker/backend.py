@@ -149,7 +149,7 @@ class DockerBackend:
         stdin: Any = subprocess.PIPE,
         stdout: Any = subprocess.PIPE,
         stderr: Any = subprocess.PIPE,
-    ) -> subprocess.Popen[bytes]:
+    ) -> Any:
         """Start a managed ``docker exec`` process without buffering its output.
 
         ``command`` is argv by default.  Shell mode deliberately accepts only a
@@ -183,9 +183,12 @@ class DockerBackend:
         rendered = self.format_command(args)
         if self.on_command is not None:
             self.on_command(rendered)
+        command = self.command(*args)
+        if tty and os.name == "nt":
+            return self._start_windows_pty(command)
         try:
             return self._process_runner(
-                self.command(*args),
+                command,
                 stdin=stdin,
                 stdout=stdout,
                 stderr=stderr,
@@ -197,6 +200,18 @@ class DockerBackend:
             ) from error
         except OSError as error:
             raise DockerUnavailableError(f"could not execute Docker: {error}") from error
+
+    @staticmethod
+    def _start_windows_pty(command: list[str]) -> Any:
+        """Run Docker through ConPTY on Windows for interactive TTY sessions."""
+        try:
+            from winpty import PtyProcess
+        except ImportError as error:
+            raise DockerError("Windows PTY support requires the pywinpty package") from error
+        try:
+            return PtyProcess.spawn(command, dimensions=(24, 80))
+        except OSError as error:
+            raise DockerUnavailableError(f"could not start Docker PTY: {error}") from error
 
     def run_interactive(self, *args: str) -> int:
         """Run Docker attached to this process's standard streams."""

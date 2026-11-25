@@ -1,4 +1,6 @@
 import subprocess
+import sys
+import types
 from typing import Any
 
 import pytest
@@ -73,6 +75,22 @@ def test_backend_builds_explicit_argv_exec_without_shell() -> None:
             },
         )
     ]
+
+
+def test_backend_starts_windows_pty_with_pywinpty(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[tuple[list[str], tuple[int, int]]] = []
+
+    class FakePtyProcess:
+        @classmethod
+        def spawn(cls, command: list[str], *, dimensions: tuple[int, int]) -> object:
+            seen.append((command, dimensions))
+            return cls()
+
+    monkeypatch.setitem(sys.modules, "winpty", types.SimpleNamespace(PtyProcess=FakePtyProcess))
+    result = DockerBackend._start_windows_pty(["docker", "exec", "--tty", "demo", "sh"])
+
+    assert isinstance(result, FakePtyProcess)
+    assert seen == [(["docker", "exec", "--tty", "demo", "sh"], (24, 80))]
 
 
 def test_backend_shell_exec_requires_explicit_string() -> None:

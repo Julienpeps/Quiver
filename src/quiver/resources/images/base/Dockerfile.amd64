@@ -27,6 +27,12 @@ RUN sed -i '/^\[options\]/a DisableSandbox' /etc/pacman.conf \
     && pacman -S --noconfirm --needed blackarch-keyring \
     && pacman -Scc --noconfirm
 
+COPY images/common/packages/bootstrap-paru /usr/local/lib/quiver/bootstrap-paru
+COPY images/common/packages/quiver-paru /usr/local/bin/paru
+RUN chmod 0755 /usr/local/lib/quiver/bootstrap-paru /usr/local/bin/paru \
+    && /usr/local/lib/quiver/bootstrap-paru \
+    && rm /usr/local/lib/quiver/bootstrap-paru
+
 COPY images/common/entrypoint/quiver-entrypoint /usr/local/bin/quiver-entrypoint
 COPY images/common/shell/quiver-record-shell /usr/local/bin/quiver-record-shell
 COPY images/common/shell/quiver-audit-hook.zsh /usr/local/lib/quiver/quiver-audit-hook.zsh

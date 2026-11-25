@@ -9,6 +9,8 @@ def test_amd64_image_installs_and_exposes_runtime_contract() -> None:
 
     assert "FROM archlinux:base-devel" in dockerfile
     assert "blackarch-keyring" in dockerfile
+    assert "common/packages/bootstrap-paru" in dockerfile
+    assert "common/packages/quiver-paru" in dockerfile
     pacman_install = dockerfile.split("    && python -m venv", maxsplit=1)[0]
     for unavailable_package in ("novnc", "websockify", "wireguard-go"):
         assert unavailable_package not in pacman_install
@@ -23,6 +25,23 @@ def test_amd64_image_installs_and_exposes_runtime_contract() -> None:
     assert "quiver-gui" in dockerfile
     assert "images/common/gui/assets/quiver-background.png" in dockerfile
     assert 'ENTRYPOINT ["/usr/local/bin/quiver-entrypoint"]' in dockerfile
+
+
+def test_paru_bootstrap_and_root_wrapper_keep_aur_builds_unprivileged() -> None:
+    bootstrap = (ROOT / "images/common/packages/bootstrap-paru").read_text()
+    wrapper = (ROOT / "images/common/packages/quiver-paru").read_text()
+
+    assert "pacman -Syu --noconfirm --needed base-devel git rust sudo" in bootstrap
+    assert "runuser -u aurbuilder" in bootstrap
+    assert "makepkg --nodeps --noconfirm" in bootstrap
+    assert "git checkout \"$PARU_AUR_COMMIT\"" in bootstrap
+    assert "exec runuser -u aurbuilder" in wrapper
+    assert "/usr/bin/paru \"$@\"" in wrapper
+
+    for profile in ("web", "internal", "external", "cloud", "full"):
+        dockerfile = (ROOT / f"images/profiles/{profile}/Dockerfile").read_text()
+        assert "paru -Syu --noconfirm --needed" in dockerfile
+        assert "pacman -S --noconfirm --needed" not in dockerfile
 
 
 def test_container_scripts_are_safe_and_supervisor_is_configured() -> None:

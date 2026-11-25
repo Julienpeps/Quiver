@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -eu
+
+# paru deliberately refuses to run as root. Keep the build step unprivileged
+# even when Quiver's container shell (and Docker build) is root.
+if [[ ${EUID} -eq 0 ]]; then
+    exec runuser -u aurbuilder -- env HOME=/home/aurbuilder /usr/bin/paru "$@"
+fi
+exec /usr/bin/paru "$@"

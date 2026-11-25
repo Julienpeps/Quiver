@@ -8,11 +8,11 @@ ARG TARGETARCH
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN test -n "$REQUIRED_PACKAGES" \
-    && pacman -Sy --noconfirm --needed $REQUIRED_PACKAGES \
+    && paru -Syu --noconfirm --needed $REQUIRED_PACKAGES \
     && for package in $OPTIONAL_PACKAGES; do \
-        pacman -S --noconfirm --needed "$package" || echo "Skipping unavailable optional package: $package"; \
+        paru -S --noconfirm --needed "$package" || echo "Skipping unavailable optional package: $package"; \
        done \
-    && pacman -Scc --noconfirm
+    && paru -Scc --noconfirm
 
 # Google does not publish gcloud through Arch or Arch Linux ARM repositories.
 # Its official archive has native x86_64 and ARM variants.

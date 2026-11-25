@@ -13,7 +13,7 @@ def test_each_profile_has_a_data_manifest_and_build_definition() -> None:
         assert report.required
         dockerfile = (ROOT / "images" / "profiles" / profile / "Dockerfile").read_text()
         assert "ARG REQUIRED_PACKAGES" in dockerfile
-        assert "pacman -Sy --noconfirm --needed $REQUIRED_PACKAGES" in dockerfile
+        assert "paru -Syu --noconfirm --needed $REQUIRED_PACKAGES" in dockerfile
         assert "Skipping unavailable optional package" in dockerfile
 
 

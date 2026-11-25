@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# pacman is required for this initial bootstrap: paru itself is an AUR
+# package and uses pacman to install the package it builds.
+pacman -Syu --noconfirm --needed base-devel git rust sudo
+useradd --create-home --shell /bin/bash aurbuilder
+install -d -o aurbuilder -g aurbuilder -m 0755 /home/aurbuilder/.cache
+printf '%s\n' 'aurbuilder ALL=(root) NOPASSWD: /usr/bin/pacman' \
+    > /etc/sudoers.d/aurbuilder
+chmod 0440 /etc/sudoers.d/aurbuilder
+visudo --check --file=/etc/sudoers.d/aurbuilder
+
+# Build paru as the unprivileged account from a pinned AUR package-base commit.
+PARU_AUR_COMMIT=f8bb12fcd306aef6a6a8f8790d63e729a76849c9
+runuser -u aurbuilder -- env HOME=/home/aurbuilder PARU_AUR_COMMIT="$PARU_AUR_COMMIT" bash -euo pipefail -c '
+    git clone https://aur.archlinux.org/paru.git /home/aurbuilder/paru
+    cd /home/aurbuilder/paru
+    git checkout "$PARU_AUR_COMMIT"
+    makepkg --nodeps --noconfirm
+'
+pacman -U --noconfirm /home/aurbuilder/paru/paru-*.pkg.tar.*
+rm -rf /home/aurbuilder/paru
